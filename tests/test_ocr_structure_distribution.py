@@ -1,0 +1,100 @@
+"""Tests for OCR structure-type distribution."""
+
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+import pytest
+
+from benchmark_design.ocr.structure_distribution import (
+    STRUCTURE_TYPES,
+    compute_ocr_structure_distribution,
+    max_structure_depth,
+)
+from benchmark_design.report.structure_distribution_table import write_structure_distribution_report
+
+FIXTURE_PATH = Path(__file__).parent / "fixtures" / "sample_page.json"
+FULL_BENCHMARK = Path("/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark")
+
+
+@pytest.fixture
+def sample_benchmark_dir(tmp_path: Path) -> Path:
+    target = tmp_path / "sample.jpg.json"
+    shutil.copy(FIXTURE_PATH, target)
+    return tmp_path
+
+
+def test_max_structure_depth_nested_fraction() -> None:
+    tokens = [r"\frac", "{", r"\frac", "{", "a", "}", "{", "b", "}", "}", "{", "c", "}"]
+    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "分式")
+    assert max_structure_depth(tokens, spec) == 2
+
+
+def test_max_structure_depth_matrix_environment() -> None:
+    tokens = [r"\begin", "{", "cases", "}", "a", r"\\", "b", r"\end", "{", "cases", "}"]
+    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "Matrix")
+    assert max_structure_depth(tokens, spec) == 1
+
+
+def test_max_structure_depth_nested_matrix() -> None:
+    tokens = [
+        r"\begin", "{", "cases", "}",
+        r"\begin", "{", "pmatrix", "}", "a", r"\end", "{", "pmatrix", "}",
+        r"\end", "{", "cases", "}",
+    ]
+    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "Matrix")
+    assert max_structure_depth(tokens, spec) == 2
+
+
+def test_compute_ocr_structure_distribution_fixture(sample_benchmark_dir: Path) -> None:
+    metrics = compute_ocr_structure_distribution(sample_benchmark_dir)
+    rows = {row.structure_type: row for row in metrics.rows}
+
+    assert metrics.expression_count == 3
+    assert metrics.structural_token_count == 4
+    assert rows["下标"].expression_ratio == pytest.approx(2 / 3)
+    assert rows["下标"].occurrence_ratio == pytest.approx(1.0)
+    assert rows["下标"].max_depth == 1
+    assert rows["下标"].occurrence_count == 4
+    assert rows["分式"].expression_ratio == 0.0
+    assert rows["Matrix"].expression_ratio == 0.0
+    assert rows["积分"].occurrence_count == 0
+
+
+def test_write_structure_distribution_report(sample_benchmark_dir: Path, tmp_path: Path) -> None:
+    metrics = compute_ocr_structure_distribution(sample_benchmark_dir)
+    paths = write_structure_distribution_report(
+        metrics,
+        tmp_path / "ocr",
+        input_dir=sample_benchmark_dir,
+    )
+
+    csv_text = paths["csv"].read_text(encoding="utf-8")
+    assert "structure_type,trigger_tokens,expr_ratio" in csv_text
+    assert "下标,_,0.666667,1.000000,1,2,4" in csv_text
+    assert paths["markdown"].exists()
+    assert paths["metadata"].exists()
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not FULL_BENCHMARK.is_dir(), reason="full benchmark dataset unavailable")
+def test_compute_ocr_structure_distribution_full_benchmark() -> None:
+    metrics = compute_ocr_structure_distribution(FULL_BENCHMARK)
+    rows = {row.structure_type: row for row in metrics.rows}
+
+    assert metrics.expression_count == 152_113
+    assert metrics.structural_token_count == 345_162
+    assert rows["分式"].expression_ratio == pytest.approx(0.33160873824065007)
+    assert rows["分式"].occurrence_ratio == pytest.approx(0.2672629084314032)
+    assert rows["分式"].max_depth == 3
+    assert rows["上标"].expression_ratio == pytest.approx(0.27050942391511573)
+    assert rows["下标"].occurrence_ratio == pytest.approx(0.28943800302466666)
+    assert rows["根式"].expression_ratio == pytest.approx(0.12046307679159572)
+    assert rows["根式"].occurrence_count == 28_037
+    assert rows["积分"].occurrence_count == 0
+    assert rows["Matrix"].expression_ratio == pytest.approx(0.038274177749436276)
+    assert rows["Matrix"].occurrence_ratio == pytest.approx(0.10316894675543657)
+    assert rows["Matrix"].max_depth == 2
+    assert rows["Matrix"].occurrence_count == 35_610
+    assert rows["极限"].occurrence_count == 74

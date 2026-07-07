@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "benchmark-design"
+version = "0.1.0"
+description = "Benchmark dataset analysis for OCR / layout / visual metrics"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["rich>=13.0", "matplotlib>=3.8", "Pillow>=10.0", "numpy>=1.26", "opencv-python-headless>=4.8"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["benchmark_design"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: full-dataset integration tests",
+]

@@ -1,0 +1,27 @@
+{
+  "image_name": "sample.jpg",
+  "blocks": [
+    {
+      "order": 0,
+      "type": "Txtblock",
+      "polygon": [],
+      "lines": [
+        {
+          "order": 0,
+          "ocr": "解 : ( 1 ) 依 题",
+          "polygon": []
+        },
+        {
+          "order": 1,
+          "ocr": "\\therefore b _ { n } = 2 a _ { n + 1 } - c",
+          "polygon": []
+        },
+        {
+          "order": 2,
+          "ocr": "a _ { n } = 2 b _ { n + 1 } - c",
+          "polygon": []
+        }
+      ]
+    }
+  ]
+}

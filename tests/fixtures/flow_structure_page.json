@@ -1,0 +1,23 @@
+{
+  "image_name": "sample.jpg",
+  "blocks": [
+    {
+      "order": 0,
+      "type": "Txtblock",
+      "polygon": [[100, 80], [450, 80], [450, 500], [100, 500]],
+      "lines": [{"order": 0, "ocr": "a", "polygon": []}]
+    },
+    {
+      "order": 1,
+      "type": "Txtblock",
+      "polygon": [[550, 90], [900, 90], [900, 520], [550, 520]],
+      "lines": [{"order": 0, "ocr": "b", "polygon": []}]
+    },
+    {
+      "order": 2,
+      "type": "figure",
+      "polygon": [[300, 600], [700, 600], [700, 800], [300, 800]],
+      "lines": []
+    }
+  ]
+}

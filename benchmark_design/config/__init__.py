@@ -1,0 +1,34 @@
+"""Domain-scoped configuration with backward-compatible re-exports."""
+
+from __future__ import annotations
+
+from benchmark_design.config.hmer import (
+    CROSS_BENCHMARK_NOTES,
+    CROSS_BENCHMARK_PROVENANCE,
+    CROSS_BENCHMARK_REPORT_GROUPS,
+    CROSS_BENCHMARK_REPORT_ORDER,
+    CROSS_BENCHMARK_ROOT,
+    CROSS_BENCHMARK_SETS,
+    DEFAULT_BENCHMARK_INPUT,
+)
+from benchmark_design.config.shared import DEFAULT_OUTPUT_ROOT, DEFAULT_UNIFIED_OUTPUT_ROOT
+from benchmark_design.config.vision import (
+    DEFAULT_VISION_INPUT,
+    DEFAULT_VISION_OUTPUT_ROOT,
+    VISION_IMAGE_EXTENSIONS,
+)
+
+__all__ = [
+    "CROSS_BENCHMARK_NOTES",
+    "CROSS_BENCHMARK_PROVENANCE",
+    "CROSS_BENCHMARK_REPORT_GROUPS",
+    "CROSS_BENCHMARK_REPORT_ORDER",
+    "CROSS_BENCHMARK_ROOT",
+    "CROSS_BENCHMARK_SETS",
+    "DEFAULT_BENCHMARK_INPUT",
+    "DEFAULT_OUTPUT_ROOT",
+    "DEFAULT_UNIFIED_OUTPUT_ROOT",
+    "DEFAULT_VISION_INPUT",
+    "DEFAULT_VISION_OUTPUT_ROOT",
+    "VISION_IMAGE_EXTENSIONS",
+]
