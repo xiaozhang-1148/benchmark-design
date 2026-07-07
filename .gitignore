@@ -1,0 +1,4 @@
+tempt/
+
+__pycache__/
+*.py[cod]
