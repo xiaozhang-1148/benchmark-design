@@ -1,4 +1,0 @@
-rank,image_id,tag,copy
-0,img_lr_lo,boundary,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/rel_smooth/kmeans/k_02/cluster_00/boundary_nearby/00_img_lr_lo.jpg
-1,img_lr_hi,boundary,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/rel_smooth/kmeans/k_02/cluster_00/boundary_nearby/01_img_lr_hi.jpg
-2,img_lr2,boundary,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/rel_smooth/kmeans/k_02/cluster_00/boundary_nearby/02_img_lr2.jpg

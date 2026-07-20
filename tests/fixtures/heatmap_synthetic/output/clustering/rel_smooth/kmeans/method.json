@@ -1,8 +1,0 @@
-{
-  "method": "KMeans",
-  "feature": "rel_smooth",
-  "k_values": [
-    2,
-    3
-  ]
-}
