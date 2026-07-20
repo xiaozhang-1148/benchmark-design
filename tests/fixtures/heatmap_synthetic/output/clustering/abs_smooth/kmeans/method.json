@@ -1,0 +1,8 @@
+{
+  "method": "KMeans",
+  "feature": "abs_smooth",
+  "k_values": [
+    2,
+    3
+  ]
+}

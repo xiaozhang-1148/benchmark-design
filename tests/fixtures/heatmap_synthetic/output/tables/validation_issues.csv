@@ -1,0 +1,9 @@
+image_id,image_path,issue_type,message
+img_lr_lo,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_lr_lo.png,blank_page,no significant ink detected
+img_lr_hi,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_lr_hi.png,blank_page,no significant ink detected
+img_blank,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_blank.png,blank_page,no significant ink detected
+img_lr2,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_lr2.png,blank_page,no significant ink detected
+img_lr_lo,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_lr_lo.png,blank_page,no significant ink detected
+img_lr_hi,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_lr_hi.png,blank_page,no significant ink detected
+img_blank,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_blank.png,blank_page,no significant ink detected
+img_lr2,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/dataset/img_lr2.png,blank_page,no significant ink detected

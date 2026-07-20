@@ -1,0 +1,29 @@
+{
+  "template_group": "t1",
+  "n_samples": 5,
+  "selected_k": 2,
+  "pca_cumulative_variance": 0.9999999999999999,
+  "k_selection": [
+    {
+      "k": 2,
+      "silhouette": 0.37522932189751657,
+      "calinski_harabasz": 4.9678200114049105,
+      "davies_bouldin": 0.7764013787327768
+    }
+  ],
+  "stability": {
+    "bootstrap_iterations": 5,
+    "mean_ari": 0.5,
+    "std_ari": 0.6324555320336759
+  },
+  "seed_consistency_ari": 1.0,
+  "small_cluster_warnings": [
+    {
+      "cluster": 1,
+      "n": 2
+    }
+  ],
+  "feature_mode": "relative_layout",
+  "clustering_grid_version": "smoothed_relative",
+  "algorithm": "kmeans"
+}

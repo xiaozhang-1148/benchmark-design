@@ -1,0 +1,20 @@
+2026-07-19 20:39:56,813 [INFO] heatmap_analysis.io: Preprocessing checks: 10 images, 0 issues
+2026-07-19 20:39:56,988 [INFO] heatmap_analysis.pipeline: Extract done: 10 new, 0 skipped, 0 failed
+2026-07-19 20:39:56,999 [INFO] heatmap_analysis.aggregation: Aggregated 10 heatmaps
+2026-07-19 20:39:57,383 [INFO] heatmap_analysis.clustering: Clustering group t1: k=2, n=5
+2026-07-19 20:39:57,632 [INFO] heatmap_analysis.clustering: Clustering group t2: k=2, n=5
+2026-07-19 20:40:09,900 [INFO] heatmap_analysis.pipeline: Pipeline complete. Report: /home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/report/index.html
+2026-07-19 21:24:29,163 [INFO] heatmap_analysis.clustering: Exported fixed k=3 cluster centers to /home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/t1/k_fixed_03
+2026-07-19 21:24:29,163 [WARNING] heatmap_analysis.clustering: Skip extra k=5 (n=5)
+2026-07-19 21:24:29,164 [INFO] heatmap_analysis.clustering: Clustering group t1: k=2, n=5
+2026-07-19 21:24:31,252 [INFO] heatmap_analysis.clustering: Exported fixed k=3 cluster centers to /home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/t2/k_fixed_03
+2026-07-19 21:24:31,253 [WARNING] heatmap_analysis.clustering: Skip extra k=5 (n=5)
+2026-07-19 21:24:31,253 [INFO] heatmap_analysis.clustering: Clustering group t2: k=2, n=5
+2026-07-20 13:21:23,136 [INFO] heatmap_analysis.cluster_study: Extracting 64×64 heatmaps...
+2026-07-20 13:21:32,369 [INFO] heatmap_analysis.cluster_study: Extracting 64×64 heatmaps...
+2026-07-20 13:21:35,418 [INFO] heatmap_analysis.pipeline: Single-GPU extract on device 0
+2026-07-20 13:21:48,436 [INFO] heatmap_analysis.pipeline: Extract done: 10 new, 0 skipped, 0 failed
+2026-07-20 13:21:48,443 [INFO] heatmap_analysis.cluster_study: Loaded 10 samples, grid 64×64
+2026-07-20 13:21:55,419 [INFO] heatmap_analysis.cluster_study: [abs_smooth] K-means done (2 k values)
+2026-07-20 13:22:02,034 [INFO] heatmap_analysis.cluster_study: [rel_smooth] K-means done (2 k values)
+2026-07-20 13:22:02,036 [INFO] heatmap_analysis.cluster_study: Cluster study finished: /home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering

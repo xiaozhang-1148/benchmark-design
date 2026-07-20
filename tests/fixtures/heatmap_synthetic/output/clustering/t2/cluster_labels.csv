@@ -1,0 +1,6 @@
+image_id,cluster,template_group
+img_lr_hi,1,t2
+img_top_lo,0,t2
+img_top_hi,0,t2
+img_lr2,1,t2
+img_top2,0,t2

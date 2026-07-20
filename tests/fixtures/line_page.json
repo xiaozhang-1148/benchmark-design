@@ -1,0 +1,44 @@
+{
+  "image_name": "line_page.jpg",
+  "blocks": [
+    {
+      "order": 0,
+      "type": "Txtblock",
+      "polygon": [],
+      "lines": [
+        {
+          "order": 0,
+          "ocr": "horizontal line",
+          "polygon": [[30, 20], [170, 20], [170, 32], [30, 32]]
+        },
+        {
+          "order": 1,
+          "ocr": "",
+          "polygon": [[40, 50], [90, 45], [95, 65], [45, 70]]
+        },
+        {
+          "order": 2,
+          "ocr": "neighbor",
+          "polygon": [[100, 48], [150, 46], [152, 66], [102, 68]]
+        },
+        {
+          "order": 3,
+          "ocr": "overlap",
+          "polygon": [[110, 52], [140, 51], [141, 61], [111, 62]]
+        }
+      ]
+    },
+    {
+      "order": 1,
+      "type": "deleted",
+      "polygon": [],
+      "lines": [
+        {
+          "order": 0,
+          "ocr": "",
+          "polygon": [[2, 2], [90, 2], [90, 14], [2, 14]]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "isolation_forest": [
+    "img_top_lo",
+    "img_top_hi"
+  ],
+  "pca_outliers": [],
+  "blank_samples": [
+    "img_lr_hi",
+    "img_lr2"
+  ],
+  "high_ink_coverage": [
+    "img_top_lo",
+    "img_top_hi",
+    "img_top2",
+    "img_lr_hi",
+    "img_lr2"
+  ]
+}
