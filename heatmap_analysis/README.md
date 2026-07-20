@@ -78,7 +78,7 @@ hotmap/                    # 默认输出目录
 python -m heatmap_analysis run-all --config config/heatmap_analysis.yaml
 ```
 
-合成数据验证：
+合成数据验证（输出写入 `tests/fixtures/heatmap_synthetic/output/`，已在 `.gitignore` 中，需本地生成）：
 
 ```bash
 python tests/fixtures/generate_heatmap_synthetic.py
@@ -134,7 +134,8 @@ outputs/
 
 ```bash
 pytest tests/test_heatmap.py tests/test_metrics.py tests/test_alignment.py \
-       tests/test_aggregation.py tests/test_clustering.py -v
+       tests/test_aggregation.py tests/test_clustering.py \
+       tests/test_heatmap_pipeline_smoke.py -v
 ```
 
 ## 当前限制

@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
-import pandas as pd
-import pytest
 from sklearn.cluster import KMeans
 
-from heatmap_analysis.clustering import evaluate_kmeans_k, bootstrap_stability
+from heatmap_analysis.clustering import bootstrap_stability, evaluate_kmeans_k
 
 
 def test_clustering_reproducible_with_seed():
@@ -33,23 +29,3 @@ def test_bootstrap_stability_runs():
     X = rng.random((40, 15))
     result = bootstrap_stability(X, k=3, seed=42, n_iter=5)
     assert "mean_ari" in result
-
-
-def test_extra_k_centers_exported():
-    from heatmap_analysis.config import load_config
-    from pathlib import Path
-
-    cfg_path = Path(__file__).resolve().parents[1] / "config.example.yaml"
-    if not cfg_path.exists():
-        pytest.skip("config.example.yaml missing")
-    cfg = load_config(cfg_path)
-    assert 3 in cfg.clustering.extra_k_outputs
-    assert 5 in cfg.clustering.extra_k_outputs
-    out = cfg.output.output_dir / "clustering"
-    if not out.exists():
-        pytest.skip("run cluster on synthetic data first")
-    k3 = list(out.rglob("k_fixed_03/cluster_centers.npz"))
-    assert k3, "expected k=3 cluster centers"
-    d = np.load(k3[0])
-    assert d["centroids_pca"].shape[0] == 3
-    assert d["centers_rel_mean"].shape[0] == 3
