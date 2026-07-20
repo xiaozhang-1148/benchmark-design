@@ -21,6 +21,12 @@ def test_load_caption_txt_tab() -> None:
     assert records[0].expression_id == "CROHME2014:sample1"
 
 
+def test_load_crohme_train_caption() -> None:
+    records = load_caption_txt(FIXTURES / "crohme" / "caption.txt", dataset="CROHMEtrain")
+    assert len(records) == 2
+    assert records[0].expression_id == "CROHMEtrain:sample1"
+
+
 def test_load_hme100k() -> None:
     records = load_hme100k(FIXTURES / "hme100k", dataset="HME100K")
     assert len(records) == 2
@@ -37,4 +43,5 @@ def test_load_mne_split() -> None:
 def test_load_mathwriting() -> None:
     records = load_mathwriting(FIXTURES / "mathwriting", dataset="MathWriting")
     assert len(records) == 1
-    assert records[0].ocr == r"\sqrt{x}"
+    assert records[0].expression_id == "MathWriting:train/shard-000/expr001"
+    assert records[0].image_name == "train/shard-000/expr001"

@@ -9,6 +9,7 @@ from pathlib import Path
 from benchmark_design.ocr.duplicates import duplicate_feature_groups
 from benchmark_design.ocr.expression_features import ExpressionFeatures, RARE_THRESHOLDS, resolve_token_counter
 from benchmark_design.ocr.token_taxonomy import TokenCategory, classify_token
+from benchmark_design.report.confusable_token_examples import write_confusable_token_examples_csv
 
 RARE_EXAMPLE_THRESHOLD = 10
 
@@ -242,6 +243,7 @@ def write_all_examples(
         "unknown_token_examples": examples_dir / "unknown_token_examples.csv",
         "duplicate_group_examples": examples_dir / "duplicate_group_examples.csv",
         "rare_token_examples": examples_dir / "rare_token_examples.csv",
+        "confusable_token_4_varphi_examples": examples_dir / "confusable_token_4_varphi_examples.csv",
     }
     write_longest_expressions_csv(features, paths["longest_expressions"])
     write_high_structure_examples_csv(features, paths["high_structure_examples"])
@@ -249,4 +251,5 @@ def write_all_examples(
     write_unknown_token_examples_csv(features, paths["unknown_token_examples"])
     write_duplicate_group_examples_csv(features, paths["duplicate_group_examples"])
     write_rare_token_examples_csv(features, paths["rare_token_examples"], token_counter=token_counter)
+    write_confusable_token_examples_csv(features, paths["confusable_token_4_varphi_examples"])
     return paths

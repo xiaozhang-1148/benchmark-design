@@ -1,0 +1,19 @@
+input_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark
+output_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark_export_1
+workers: 128
+pipelines:
+  hmer:
+    skip_cross_benchmark: false
+  block_level:
+    # Writes to {output_root}/block_level/structure_layout and hybrid_layout
+    skip_figures: false
+  page_level:
+    # Writes to {output_root}/page_level
+    config: config/image_analysis.yaml
+  line_level:
+    config: config/line_analysis.yaml
+  page_level_hmer:
+    skip_figures: false
+  page_level_latex_split:
+    enabled: true
+    config: config/page_level_latex_split.yaml

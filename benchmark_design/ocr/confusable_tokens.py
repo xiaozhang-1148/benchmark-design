@@ -6,8 +6,12 @@ from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from benchmark_design.ocr.tokenizer import tokenize_greedy
+
+if TYPE_CHECKING:
+    from benchmark_design.ocr.expression_features import ExpressionFeatures
 
 
 class ConfusableGroupTier(StrEnum):
@@ -66,10 +70,10 @@ PRIMARY_CONFUSABLE_GROUPS: tuple[ConfusableGroupSpec, ...] = (
         ("9", "g", "q"),
     ),
     _group(
-        "operator-letter",
-        "x/\\times, o/\\circ",
-        ("x", r"\times"),
-        ("o", r"\circ"),
+        "circle-like",
+        "0/o/\\theta",
+        ("0", "o"),
+        (r"\theta",),
     ),
     _group(
         "latin-greek",
@@ -79,19 +83,13 @@ PRIMARY_CONFUSABLE_GROUPS: tuple[ConfusableGroupSpec, ...] = (
     ),
     _group(
         "greek-variant",
-        "\\phi/\\varphi, \\theta",
-        (r"\phi", r"\varphi"),
-        (r"\theta",),
+        "4/\\varphi",
+        ("4", r"\varphi"),
     ),
     _group(
-        "dot-like",
-        "./\\cdot/\\cdots",
-        (".", r"\cdot", r"\cdots"),
-    ),
-    _group(
-        "delimiter-like",
-        "\\vert/\\parallel",
-        (r"\vert", r"\parallel"),
+        "operator-variable",
+        "x/\\times",
+        ("x", r"\times"),
     ),
     _group(
         "relation-stroke",
@@ -99,109 +97,24 @@ PRIMARY_CONFUSABLE_GROUPS: tuple[ConfusableGroupSpec, ...] = (
         ("<", r"\leq", r"\le"),
         (">", r"\geq", r"\ge"),
     ),
-    _group(
-        "infinity-like",
-        "8/\\infty",
-        ("8", r"\infty"),
-    ),
 )
 
-APPENDIX_ONLY_CONFUSABLE_GROUPS: tuple[ConfusableGroupSpec, ...] = (
-    _group(
-        "digit-letter-extended",
-        "0/o",
-        ("0", "o"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "latin-greek-extended",
-        "v/\\nu, w/\\omega, r/\\gamma, n/\\eta",
-        ("v", r"\nu"),
-        ("w", r"\omega"),
-        ("r", r"\gamma"),
-        ("n", r"\eta"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "greek-variant-extended",
-        "\\epsilon/\\varepsilon, \\pi/\\varpi, \\sigma/\\varsigma",
-        (r"\epsilon", r"\varepsilon"),
-        (r"\pi", r"\varpi"),
-        (r"\sigma", r"\varsigma"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "operator-letter-extended",
-        "v/\\vee, ^/\\wedge",
-        ("v", r"\vee"),
-        ("^", r"\wedge"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "dot-like-extended",
-        "\\bullet/\\ldots",
-        (r"\bullet", r"\ldots"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "delimiter-like-extended",
-        "|/\\mid/\\|",
-        ("|", r"\mid", r"\|"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "slash-like",
-        "/\\backslash/\\setminus",
-        ("/", r"\backslash", r"\setminus"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "relation-stroke-extended",
-        "=\\equiv/\\approx/\\sim",
-        ("=", r"\equiv", r"\approx", r"\sim"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "plus-cross",
-        "+/\\times/t",
-        ("+", r"\times", "t"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "minus-equals",
-        "-/=\\equiv",
-        ("-", "=", r"\equiv"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "bracket-like",
-        "([{ / )]}",
-        ("(", "[", "{"),
-        (")", "]", "}"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "set-membership",
-        "\\in/\\subset/\\subseteq; \\ni/\\supset/\\supseteq",
-        (r"\in", r"\subset", r"\subseteq"),
-        (r"\ni", r"\supset", r"\supseteq"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "percent-like",
-        "%/\\%/0",
-        ("%", r"\%", "0"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-    _group(
-        "prime-like",
-        "'/\\prime/1/l",
-        ("'", r"\prime", "1", "l"),
-        tier=ConfusableGroupTier.APPENDIX,
-    ),
-)
+APPENDIX_ONLY_CONFUSABLE_GROUPS: tuple[ConfusableGroupSpec, ...] = ()
 
 ALL_CONFUSABLE_GROUPS: tuple[ConfusableGroupSpec, ...] = PRIMARY_CONFUSABLE_GROUPS + APPENDIX_ONLY_CONFUSABLE_GROUPS
+
+
+def iter_unique_confusable_tokens() -> tuple[tuple[str, str], ...]:
+    """Return ``(group_name, token)`` pairs for each distinct confusable token."""
+    seen: set[str] = set()
+    items: list[tuple[str, str]] = []
+    for group in ALL_CONFUSABLE_GROUPS:
+        for token in group.tokens:
+            if token in seen:
+                continue
+            seen.add(token)
+            items.append((group.name, token))
+    return tuple(items)
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,13 +138,14 @@ class ConfusableGroupMetrics:
     rare_side_tokens: tuple[str, ...]
     token_counts: tuple[ConfusableTokenCount, ...]
 
-    def main_table_row(self) -> tuple[str, str, int, int, int]:
+    def main_table_row(self) -> tuple[str, str, int, float, int, float]:
         return (
             self.group.name,
             self.group.representative_tokens,
             self.token_count,
+            self.token_ratio,
             self.expression_count,
-            self.co_occurrence_expression_count,
+            self.expression_ratio,
         )
 
 
@@ -377,3 +291,44 @@ def subgroup_co_occurrence_count(
     subgroup: ConfusableSubgroupSpec,
 ) -> int:
     return sum(1 for token in subgroup.tokens if token in tokens)
+
+
+CONFUSABLE_EXAMPLE_MIN_OCR_CHARS = 3
+CONFUSABLE_EXAMPLE_COUNT_PER_TOKEN = 10
+
+
+def ocr_non_whitespace_char_count(text: str) -> int:
+    return sum(1 for char in text if not char.isspace())
+
+
+def select_confusable_token_examples(
+    features: Sequence[ExpressionFeatures],
+    *,
+    tokens: Sequence[str],
+    min_ocr_chars: int = CONFUSABLE_EXAMPLE_MIN_OCR_CHARS,
+    per_token: int = CONFUSABLE_EXAMPLE_COUNT_PER_TOKEN,
+) -> tuple[tuple[str, ExpressionFeatures], ...]:
+    """Return up to *per_token* examples per token with OCR length strictly > *min_ocr_chars*."""
+    selected: list[tuple[str, ExpressionFeatures]] = []
+    seen_ids: set[str] = set()
+
+    for token in tokens:
+        candidates = [
+            feature
+            for feature in features
+            if token in feature.token_sequence
+            and ocr_non_whitespace_char_count(feature.normalized_latex) > min_ocr_chars
+            and feature.expression_id not in seen_ids
+        ]
+        candidates.sort(
+            key=lambda feature: (
+                -ocr_non_whitespace_char_count(feature.normalized_latex),
+                -feature.token_length,
+                feature.expression_id,
+            )
+        )
+        for feature in candidates[:per_token]:
+            selected.append((token, feature))
+            seen_ids.add(feature.expression_id)
+
+    return tuple(selected)

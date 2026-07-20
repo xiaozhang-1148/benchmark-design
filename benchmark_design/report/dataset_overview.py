@@ -1,4 +1,4 @@
-"""Dataset overview statistics for HMER and vision benchmarks."""
+"""Dataset overview statistics for HMER and block-level benchmarks."""
 
 from __future__ import annotations
 
@@ -11,15 +11,15 @@ from benchmark_design.io.benchmark_loader import iter_benchmark_json_paths, load
 from benchmark_design.ocr.length_distribution import percentile
 from benchmark_design.ocr.processing import EnrichedCorpus
 from benchmark_design.ocr.processing_options import ProcessingOptions
-from benchmark_design.vision.dataset import load_vision_benchmark_dataset
-from benchmark_design.vision.flow_structure.block_roles import (
+from benchmark_design.block_level.dataset import load_block_level_benchmark_dataset
+from benchmark_design.block_level.flow_structure.block_roles import (
     is_deleted_text_block,
     is_txt_block,
     normalize_block_type,
 )
-from benchmark_design.vision.flow_structure.models import PageAnnotation
-from benchmark_design.vision.processing_options import VisionProcessingOptions
-from benchmark_design.vision.sample_record import ImageSampleRecord
+from benchmark_design.block_level.flow_structure.models import PageAnnotation
+from benchmark_design.block_level.processing_options import VisionProcessingOptions
+from benchmark_design.block_level.sample_record import ImageSampleRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,7 +236,7 @@ def _resolve_page_annotations(
 ) -> list[PageAnnotation]:
     if pages is not None:
         return list(pages)
-    dataset = load_vision_benchmark_dataset(input_dir, processing=processing)
+    dataset = load_block_level_benchmark_dataset(input_dir, processing=processing)
     return list(dataset.pages)
 
 
@@ -249,7 +249,7 @@ def compute_vision_overview(
     processing = processing or VisionProcessingOptions()
     if samples is not None:
         return compute_vision_overview_from_samples(samples)
-    dataset = load_vision_benchmark_dataset(input_dir, processing=processing)
+    dataset = load_block_level_benchmark_dataset(input_dir, processing=processing)
     return compute_vision_overview_from_samples(dataset.samples)
 
 
@@ -529,7 +529,7 @@ def write_vision_overview(
     portrait_share = metrics.orientation_share(metrics.portrait_count)
     landscape_share = metrics.orientation_share(metrics.landscape_count)
     lines = [
-        "# Vision 数据集概览",
+        "# Block-level 数据集概览",
         "",
         "| 指标 | 统计 |",
         "| --- | ---: |",
@@ -610,26 +610,33 @@ def write_dataset_overview(
     output_root: Path,
     *,
     skip_domain_overviews: bool = False,
+    page_level_detail_md: str | None = None,
+    line_level_detail_md: str | None = None,
+    structure_layout_detail_md: str | None = None,
+    summary_json_path: Path | None = None,
+    pipeline_doc_path: Path | None = None,
 ) -> Path:
     output_root.mkdir(parents=True, exist_ok=True)
     if skip_domain_overviews:
         hmer_detail_md = "HMER/summary.md"
         hmer_tables = "HMER/tables/"
-        vision_detail_md = "vision/vision_benchmark_summary.md"
-        vision_tables = "vision/tables/"
+        vision_detail_md = structure_layout_detail_md or (
+            "block_level/structure_layout/block_level_summary.md"
+        )
+        vision_tables = "block_level/structure_layout/tables/"
         block_detail_md = "block/overview.md"
         block_tables = "block/tables/"
     else:
         hmer_dir = output_root / "HMER"
-        vision_dir = output_root / "vision"
+        block_level_dir = output_root / "block_level"
         block_dir = output_root / "block"
         write_hmer_overview(metrics.hmer, hmer_dir)
-        write_vision_overview(metrics.vision, vision_dir)
+        write_vision_overview(metrics.vision, block_level_dir)
         write_block_overview(metrics.block, block_dir)
         hmer_detail_md = "HMER/overview.md"
         hmer_tables = "HMER/tables/"
-        vision_detail_md = "vision/overview.md"
-        vision_tables = "vision/tables/"
+        vision_detail_md = "block_level/overview.md"
+        vision_tables = "block_level/tables/"
         block_detail_md = "block/overview.md"
         block_tables = "block/tables/"
 
@@ -640,35 +647,75 @@ def write_dataset_overview(
     lines = [
         "# 数据集总纲",
         "",
-        *_summary_table_rows(metrics),
-        "",
-        "## Block（标注块）",
-        "",
-        *_block_table_rows(metrics.block),
-        "",
-        "## 明细",
-        "",
-        "### HMER（文本段）",
-        "",
-        f"- 字符总数：{_format_count(hmer.total_characters)}",
-        f"- 平均每页字符数：{avg_chars_per_page:.2f}",
-        "",
-        f"详见 [{hmer_detail_md}]({hmer_detail_md}) 与 `{hmer_tables}`。",
-        "",
-        "### Block（标注块）",
-        "",
-        f"- Block 标注总数：{_format_count(metrics.block.total_block_count)}",
-        f"- Txtblock 数量：{_format_count(metrics.block.txtblock_count)}",
-        "",
-        f"详见 [{block_detail_md}]({block_detail_md}) 与 `{block_tables}`。",
-        "",
-        "### Vision（视觉端）",
-        "",
-        f"- 图像长宽比分布：见 [{vision_detail_md}]({vision_detail_md})",
-        "",
-        f"详见 [{vision_detail_md}]({vision_detail_md}) 与 `{vision_tables}`。",
-        "",
     ]
+    if summary_json_path is not None:
+        summary_rel = summary_json_path.name
+        if summary_json_path.parent.resolve() == output_root.resolve():
+            lines.extend(
+                [
+                    f"> 机器可读项目总览：[`{summary_rel}`]({summary_rel})",
+                    "",
+                ]
+            )
+    lines.extend(
+        [
+            *_summary_table_rows(metrics),
+            "",
+            "## Block（标注块）",
+            "",
+            *_block_table_rows(metrics.block),
+            "",
+            "## 明细",
+            "",
+            "### HMER（文本段）",
+            "",
+            f"- 字符总数：{_format_count(hmer.total_characters)}",
+            f"- 平均每页字符数：{avg_chars_per_page:.2f}",
+            "",
+            f"详见 [{hmer_detail_md}]({hmer_detail_md}) 与 `{hmer_tables}`。",
+            "",
+            "### Block（标注块）",
+            "",
+            f"- Block 标注总数：{_format_count(metrics.block.total_block_count)}",
+            f"- Txtblock 数量：{_format_count(metrics.block.txtblock_count)}",
+            "",
+            f"详见 [{block_detail_md}]({block_detail_md}) 与 `{block_tables}`。",
+            "",
+            "### Block-level（块级图像）",
+            "",
+            f"- 页面流结构与块组成：见 [{vision_detail_md}]({vision_detail_md})",
+            "",
+            f"详见 [{vision_detail_md}]({vision_detail_md}) 与 `{vision_tables}`。",
+            "",
+        ]
+    )
+    if pipeline_doc_path is not None and pipeline_doc_path.is_file():
+        pipeline_rel = pipeline_doc_path.name
+        if pipeline_doc_path.parent.resolve() == output_root.resolve():
+            lines.extend(
+                [
+                    f"- 分层导出与 page_id 连接说明：[`{pipeline_rel}`]({pipeline_rel})",
+                    "",
+                ]
+            )
+    if page_level_detail_md is not None:
+        lines.extend(
+            [
+                "### Page-level（纯图像）",
+                "",
+                f"- 整页前景密度、对比度与热力图：见 [{page_level_detail_md}]({page_level_detail_md})",
+                "",
+            ]
+        )
+    if line_level_detail_md is not None:
+        lines.extend(
+            [
+                "### Line-level（行级标注）",
+                "",
+                f"- 几何、笔画、布局与扫描质量：见 [{line_level_detail_md}]({line_level_detail_md})",
+                "",
+            ]
+        )
     overview_path = output_root / "dataset_overview.md"
     overview_path.write_text("\n".join(lines), encoding="utf-8")
     return overview_path
@@ -685,6 +732,11 @@ def run_dataset_overview_export(
     vision_pages: Sequence[PageAnnotation] | None = None,
     metrics: DatasetOverviewMetrics | None = None,
     skip_domain_overviews: bool = False,
+    page_level_detail_md: str | None = None,
+    line_level_detail_md: str | None = None,
+    structure_layout_detail_md: str | None = None,
+    summary_json_path: Path | None = None,
+    pipeline_doc_path: Path | None = None,
 ) -> Path:
     if metrics is None:
         metrics = compute_dataset_overview(
@@ -699,4 +751,9 @@ def run_dataset_overview_export(
         metrics,
         output_root,
         skip_domain_overviews=skip_domain_overviews,
+        page_level_detail_md=page_level_detail_md,
+        line_level_detail_md=line_level_detail_md,
+        structure_layout_detail_md=structure_layout_detail_md,
+        summary_json_path=summary_json_path,
+        pipeline_doc_path=pipeline_doc_path,
     )

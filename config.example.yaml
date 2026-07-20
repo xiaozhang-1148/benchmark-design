@@ -1,0 +1,40 @@
+input:
+  dataset_dir: "./tests/fixtures/heatmap_synthetic/dataset"
+  metadata_file: "./tests/fixtures/heatmap_synthetic/dataset/metadata.csv"
+  image_column: "image_path"
+  id_column: "image_id"
+  template_column: "template_id"
+  template_dir: null
+
+preprocessing:
+  use_template_subtraction: false
+  align_to_template: true
+  preserve_aspect_ratio: true
+  edge_mask_ratio: 0.02
+  threshold_method: "otsu"
+
+heatmap:
+  grid_size: 64
+  gaussian_sigma: 1.0
+  active_cell_threshold: 0.001
+
+clustering:
+  pca_variance: 0.95
+  k_values: [2, 3]
+  gmm_components: [2, 3]
+  closest_samples: 3
+  boundary_samples: 3
+  random_seed: 42
+  min_samples_for_clustering: 5
+  separate_by_template: false
+
+report:
+  group_by:
+    - "correct"
+    - "school"
+  representative_samples: 3
+  language: "zh-CN"
+
+output:
+  output_dir: "./tests/fixtures/heatmap_synthetic/output"
+  resume: false

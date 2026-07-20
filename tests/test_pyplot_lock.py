@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from benchmark_design.report.vision.flow_structure_figures import _draw_overlay
-from benchmark_design.vision.flow_structure.models import BlockGeometryRecord, PageFlowStructureResult
+from benchmark_design.report.block_level.flow_structure_figures import _draw_overlay
+from benchmark_design.block_level.flow_structure.models import BlockGeometryRecord, PageFlowStructureResult
 
 
 def _sample_result(page_id: str = "p_lock") -> PageFlowStructureResult:

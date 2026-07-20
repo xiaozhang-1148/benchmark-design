@@ -10,7 +10,7 @@ from typing import TypeVar
 
 R = TypeVar("R")
 
-_PYPLOT_LOCK = threading.Lock()
+_PYPLOT_LOCK = threading.RLock()
 _BACKEND_CONFIGURED = False
 
 

@@ -24,7 +24,7 @@ from benchmark_design.report.export_tables import write_all_tables
 from benchmark_design.report.output_layout import BenchmarkOutputLayout, relative_input_path, relative_output_path
 from benchmark_design.report.dataset_overview import run_dataset_overview_export
 from benchmark_design.report.summary_md import write_benchmark_summary_md
-from benchmark_design.vision.processing_options import VisionProcessingOptions
+from benchmark_design.block_level.processing_options import VisionProcessingOptions
 
 
 def _write_summary(
@@ -109,6 +109,7 @@ def run_benchmark_export(
             layout.tables,
             output_root=output_root,
             metadata_dir=layout.docs_metadata,
+            features=features,
         ),
         "ast": lambda: write_ast_statistics_report(
             ast_metrics,
@@ -137,13 +138,31 @@ def run_benchmark_export(
         ),
     }
     if not skip_figures:
-        write_tasks["figures"] = lambda: write_all_figures(
-            features,
-            layout.figures,
-            token_counter=token_counter,
-            input_dir=input_dir,
-            expressions=list(enriched.expressions),
-        )
+        def _write_figures() -> dict[str, Path]:
+            from benchmark_design.report.lbd_coordinate_figures import export_lbd_coordinate_example_figures
+            from benchmark_design.report.stc_figures import export_stc_high_complexity_figures
+
+            paths = write_all_figures(
+                features,
+                layout.figures,
+                token_counter=token_counter,
+            )
+            export_lbd_coordinate_example_figures(
+                list(enriched.expressions),
+                features,
+                input_dir=input_dir,
+                figures_root=layout.figures / "lbd_coordinate_examples",
+            )
+            export_stc_high_complexity_figures(
+                list(enriched.expressions),
+                features,
+                input_dir=input_dir,
+                figures_root=layout.figures / "stc_high_complexity",
+                max_exports=20,
+            )
+            return paths
+
+        write_tasks["figures"] = _write_figures
     if not skip_cross_benchmark:
         write_tasks["cross"] = lambda: write_cross_benchmark_report(
             output_root,
@@ -180,6 +199,8 @@ def run_benchmark_export(
     if "figures" in write_results:
         figure_paths = write_results["figures"]
         manifest.update({f"figure_{key}": _rel(path) for key, path in figure_paths.items()})
+        manifest["figure_stc_high_complexity"] = _rel(layout.figures / "stc_high_complexity")
+        manifest["figure_lbd_coordinate_examples"] = _rel(layout.figures / "lbd_coordinate_examples")
 
     if "cross" in write_results:
         cross_paths = write_results["cross"]

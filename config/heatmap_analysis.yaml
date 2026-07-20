@@ -1,0 +1,55 @@
+input:
+  dataset_dir: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark"
+  metadata_file: null
+  image_column: "image_path"
+  id_column: "image_id"
+  template_column: "template_id"
+  template_dir: null
+
+preprocessing:
+  use_template_subtraction: false
+  align_to_template: true
+  preserve_aspect_ratio: true
+  edge_mask_ratio: 0.02
+  threshold_method: "otsu"
+  min_page_pixels: 1000
+  max_aspect_ratio: 3.0
+  blank_ink_threshold: 0.0001
+
+heatmap:
+  grid_size: 64
+  gaussian_sigma: 1.2
+  active_cell_threshold: 0.001
+  save_raw_grid: true
+  save_smoothed_grid: true
+
+clustering:
+  pca_variance: 0.95
+  pca_n_components: null
+  k_values: [2, 3, 4, 5, 6, 8, 10]
+  gmm_components: [2, 3, 4, 5, 6, 7, 8, 9, 10]
+  closest_samples: 20
+  boundary_samples: 20
+  random_seed: 42
+  min_samples_for_clustering: 10
+  separate_by_template: false
+
+report:
+  group_by: null
+  representative_samples: 20
+  language: "zh-CN"
+  colormap: "turbo"
+  diff_colormap: "RdBu_r"
+
+output:
+  output_dir: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark_export_1/hotmap"
+  cache_dir: null
+  resume: true
+
+gpu:
+  enabled: true
+  device_ids: null
+  num_workers: null
+  min_images_for_parallel: 500
+  preprocessing: false
+  clustering: true

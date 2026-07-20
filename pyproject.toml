@@ -8,13 +8,39 @@ version = "0.1.0"
 description = "Benchmark dataset analysis for OCR / layout / visual metrics"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["rich>=13.0", "matplotlib>=3.8", "Pillow>=10.0", "numpy>=1.26", "opencv-python-headless>=4.8"]
+dependencies = [
+    "rich>=13.0",
+    "matplotlib>=3.8",
+    "Pillow>=10.0",
+    "numpy>=1.26",
+    "opencv-python-headless>=4.8",
+    "pandas>=2.1",
+    "pyarrow>=14.0",
+    "PyYAML>=6.0",
+    "shapely>=2.0",
+    "scikit-image>=0.22",
+    "scipy>=1.11",
+    "scikit-learn>=1.3",
+    "seaborn>=0.13",
+    "tqdm>=4.66",
+    "jinja2>=3.1",
+    "joblib>=1.3",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+gpu = ["cupy-cuda12x>=13.0"]
+deepseek = [
+    "torch>=2.6",
+    "transformers>=4.51",
+    "vllm>=0.19",
+    "umap-learn>=0.5",
+    "faiss-cpu>=1.7",
+    "addict>=2.4",
+]
 
 [tool.hatch.build.targets.wheel]
-packages = ["benchmark_design"]
+packages = ["benchmark_design", "heatmap_analysis", "src"]
 
 [tool.pytest.ini_options]
 markers = [

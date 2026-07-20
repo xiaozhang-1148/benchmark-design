@@ -1,0 +1,74 @@
+dataset_version: processed_2
+
+train_ratio: 0.8
+val_ratio: 0.1
+test_ratio: 0.1
+
+random_seed: 42
+candidate_seeds: [42, 43, 44]
+
+# Continuous metric bins (inclusive lower, exclusive upper except last open-ended).
+expression_count_bins:
+  - {label: expr_1_10, min: 1, max: 11}
+  - {label: expr_11_20, min: 11, max: 21}
+  - {label: expr_21_40, min: 21, max: 41}
+  - {label: expr_gt_40, min: 41, max: null}
+
+max_expression_token_bins:
+  - {label: maxlen_1_10, min: 1, max: 11}
+  - {label: maxlen_11_20, min: 11, max: 21}
+  - {label: maxlen_21_40, min: 21, max: 41}
+  - {label: maxlen_41_80, min: 41, max: 81}
+  - {label: maxlen_gt_80, min: 81, max: null}
+
+page_token_bins:
+  - {label: page_token_bin_1, min: 0, max: 200}
+  - {label: page_token_bin_2, min: 200, max: 400}
+  - {label: page_token_bin_3, min: 400, max: 700}
+  - {label: page_token_bin_4, min: 700, max: 1200}
+  - {label: page_token_tail, min: 1200, max: null}
+
+foreground_density_bins:
+  - {label: density_lt_2pct, min: 0, max: 0.02}
+  - {label: density_2_4pct, min: 0.02, max: 0.04}
+  - {label: density_4_6pct, min: 0.04, max: 0.06}
+  - {label: density_6_8pct, min: 0.06, max: 0.08}
+  - {label: density_8_10pct, min: 0.08, max: 0.10}
+  - {label: density_ge_10pct, min: 0.10, max: null}
+
+line_aspect_ratio_bins:
+  - {label: aspect_lt_3, min: 0, max: 3}
+  - {label: aspect_3_5, min: 3, max: 5}
+  - {label: aspect_5_8, min: 5, max: 8}
+  - {label: aspect_8_12, min: 8, max: 12}
+  - {label: aspect_gt_12, min: 12, max: null}
+
+# Separate depth=0 and depth=1; do not merge low-support depths.
+ast_depth_labels:
+  depth_0: [0]
+  depth_1: [1]
+  depth_2: [2]
+  depth_3: [3]
+  depth_4_5: [4, 5, 6, 7, 8, 9, 10]
+
+min_support_pages: 30
+min_expected_per_split: 1
+min_split_ratio_for_support: 0.05
+
+require_train_vocab_coverage: true
+
+# Tie-break among equal scores: seeded_hash(random_seed, page_id) — not lexicographic page_id.
+tie_break: seeded_hash
+
+global_swap_max_iterations: 100
+repair_top_k_train: 50
+max_relative_deviation_tolerance: 0.15
+
+family_tolerances:
+  scale: 0.15
+  structure: 0.15
+  rare8: 0.20
+  similar_token: 0.20
+  vocabulary: 0.0
+
+algorithm_version: page_level_latex_split_v3

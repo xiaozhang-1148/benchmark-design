@@ -1,0 +1,4 @@
+rank,image_id,tag,copy
+0,img_lr2,closest,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/abs_smooth/kmeans/k_03/cluster_00/closest_to_center/00_img_lr2.jpg
+1,img_blank,closest,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/abs_smooth/kmeans/k_03/cluster_00/closest_to_center/01_img_blank.jpg
+2,img_lr_hi,closest,/home/baoquan/ocr-process/benchmark-design/tests/fixtures/heatmap_synthetic/output/clustering/abs_smooth/kmeans/k_03/cluster_00/closest_to_center/02_img_lr_hi.jpg

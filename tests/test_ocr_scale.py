@@ -36,6 +36,10 @@ def test_tokenize_greedy_delete_marker() -> None:
     assert tokenize_greedy(r"\delete x") == ["\\delete", "x"]
 
 
+def test_tokenize_greedy_triple_hyphen_as_three_minus_operators() -> None:
+    assert tokenize_greedy("a---b") == ["a", "-", "-", "-", "b"]
+
+
 def test_iter_expressions_skips_empty_ocr(sample_benchmark_dir: Path) -> None:
     page = json.loads((sample_benchmark_dir / "sample.jpg.json").read_text(encoding="utf-8"))
     page["blocks"][0]["lines"].append({"order": 3, "ocr": "   ", "polygon": []})

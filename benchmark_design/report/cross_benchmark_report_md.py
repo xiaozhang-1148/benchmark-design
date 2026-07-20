@@ -11,10 +11,12 @@ from benchmark_design.ocr.cross_benchmark import (
     AST_DEPTH_COUNT_LABELS,
     STRUCTURE_ANY_COLUMN,
     STRUCTURE_TYPE_COUNT_LABELS,
+    STRUCTURAL_DIFFICULTY_TIERS,
 )
 from benchmark_design.ocr.structure_distribution import (
     MATRIX_STRUCTURE_REPORT_COLUMN,
     MATRIX_STRUCTURE_TRIGGER_TOKENS,
+    MATRIX_STRUCTURE_TYPE,
 )
 
 
@@ -150,13 +152,13 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
             "",
             "Expression counts and shares by exact Table-6 structure-type count per expression. "
             f"**{STRUCTURE_ANY_COLUMN}** uses corpus-wide share (`count / all expressions`). "
-            "The four type-count columns and **Matrix env** use **within-structure share** "
+            f"The four type-count columns and **{MATRIX_STRUCTURE_REPORT_COLUMN}** use **within-structure share** "
             "(`count / expressions with ≥1 structure type`). The four type-count columns are "
             "**mutually exclusive** (`1` / `2` / `3` / `≥4` distinct types; expressions with zero "
             "structure types appear only in the gap between **Any Structure ≥1** and 100%). "
             "Each cell shows `count (share%)`. "
-            f"**{MATRIX_STRUCTURE_REPORT_COLUMN}** is a **non-exclusive subset tag** (Matrix is one of "
-            "the eight structure types). Do **not** sum **Matrix env** with the other columns. "
+            f"**{MATRIX_STRUCTURE_REPORT_COLUMN}** is a **non-exclusive subset tag** ({MATRIX_STRUCTURE_TYPE} is one of "
+            f"the eight structure types). Do **not** sum **{MATRIX_STRUCTURE_REPORT_COLUMN}** with the other columns. "
             f"Triggers: {MATRIX_STRUCTURE_TRIGGER_TOKENS}.",
             "",
             f"| Dataset | {STRUCTURE_ANY_COLUMN} | "
@@ -207,10 +209,35 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
             f"| {profile.display_name} | {depth_cells} | {profile.max_ast_depth} |"
         )
 
+    tier_headers = " | ".join(STRUCTURAL_DIFFICULTY_TIERS)
     lines.extend(
         [
             "",
-            "## 7. Joint Difficulty Profile",
+            "## 7. Expression-level Structural Difficulty (L1–L4)",
+            "",
+            "Expression counts and shares by **Expression-level Structural Difficulty** tier, derived from "
+            "L/B/D coordinates: **L** token length (L0 ≤ 20, L1 21–40, L2 > 40), **B** structure breadth "
+            "(B0 0–1 types, B1 2 types, B2 ≥ 3 types), **D** PosFormer AST depth (D0 0–1, D1 2, D2 ≥ 3). "
+            "Classification: **L1** (L0B0D0); **L4** (≥ 2 of L2/B2/D2 with L ≠ L0 and D ≠ D0); "
+            "**L2** (score = 1, or score = 2 with L ≠ L2 and D ≠ D2); **L3** (all remaining). "
+            "Each cell shows `count (share%)`.",
+            "",
+            f"| Dataset | {tier_headers} |",
+            "| --- | " + " | ".join("---:" for _ in STRUCTURAL_DIFFICULTY_TIERS) + " |",
+        ]
+    )
+    for profile in profiles:
+        expression_count = profile.expression_count
+        tier_cells = " | ".join(
+            _fmt_count_share(count, count / expression_count if expression_count else 0.0)
+            for count in profile.structural_difficulty_counts
+        )
+        lines.append(f"| {profile.display_name} | {tier_cells} |")
+
+    lines.extend(
+        [
+            "",
+            "## 8. Joint Difficulty Profile",
             "",
             "| Dataset | >40 Tokens | >80 Tokens | AST >=3 | >40 & AST >=2 | >80 & AST >=3 | "
             "Multi-Struct >=3 |",
@@ -232,7 +259,7 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
             "**Takeaway:** This table captures compound difficulty: expressions that are long, "
             "structurally deep, and compositionally complex.",
             "",
-            "## 8. Token Taxonomy Composition",
+            "## 9. Token Taxonomy Composition",
             "",
             "Token occurrence counts and shares under the unified `LATEX_DICT` taxonomy "
             "(same categories as Table 4). Each cell shows `count (share%)`. "
@@ -271,7 +298,7 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
     lines.extend(
         [
             "",
-            "## 9. Summary of Advantages",
+            "## 10. Summary of Advantages",
             "",
             "| Dimension | Evidence | Interpretation |",
             "| --- | --- | --- |",
@@ -283,7 +310,7 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
             "Strong long-tail difficulty |",
             f"| Mixed text-math OCR | CJK {_fmt_pct(ours.cjk_token_ratio)} + structural {_fmt_pct(ours.structural_token_ratio)} | "
             "More realistic OCR setting |",
-            "| Structure complexity | fraction, superscript, subscript, radical, matrix, limit, sum | "
+            "| Structure complexity | fraction, superscript, subscript, radical, Env., limit, sum | "
             "Covers diverse mathematical structures |",
             "",
         ]

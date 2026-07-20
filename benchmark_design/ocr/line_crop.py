@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from benchmark_design.config.vision import VISION_IMAGE_EXTENSIONS
+from benchmark_design.config.block_level import VISION_IMAGE_EXTENSIONS
 from benchmark_design.io.polygon import parse_polygon_points
 
 

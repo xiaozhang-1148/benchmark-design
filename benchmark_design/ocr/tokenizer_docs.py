@@ -248,7 +248,7 @@ def write_latex_dictionary_md(output_path: Path) -> None:
         ("| `fraction_binomial` | "
          f"{group_counts.get('fraction_binomial', 0):,} | Fraction / binomial structure triggers |"),
         ("| `environment` | "
-         f"{group_counts.get('environment', 0):,} | Matrix / cases / align-like environment names |"),
+         f"{group_counts.get('environment', 0):,} | Env. / cases / align-like environment names |"),
         ("| `operator` | "
          f"{group_counts.get('operator', 0):,} | Binary operators, relations, large operators |"),
         ("| `delimiter` | "
@@ -460,7 +460,7 @@ def write_data_schema_md(output_path: Path) -> None:
         "| `structure_type_count` | int | Number of distinct structure types in this expression. |",
         "| `structure_max_depths` | JSON | Per-structure-type max nesting depth within this expression. |",
         "| `ast_depth` | int | PosFormer position-forest max nested level. |",
-        "| `parse_status` | string | `ok`, `unbalanced_braces`, or `incomplete_substructure`. |",
+        "| `parse_status` | string | `ok`, `unknown_token`, `unbalanced_braces`, or `incomplete_substructure`. |",
         "",
         "## Notes",
         "",
@@ -495,11 +495,12 @@ def write_known_limitations_md(output_path: Path) -> None:
         "from `other / unknown tokens`. LaTeX spacing commands (`\\,`, `\\quad`, …) remain dictionary",
         "entries and map to `special symbol tokens`.",
         "",
-        "## Matrix alignment and line breaks",
+        "## Env. alignment and line breaks",
         "",
-        "- `\\\\` (double backslash) — row breaks in matrices / cases → `layout / alignment tokens`.",
+        "- `\\\\` (double backslash) — row breaks in Env. / cases layouts → `layout / alignment tokens`.",
         "- `&` — column separators in aligned layouts → `layout / alignment tokens`.",
-        "- Matrix **nesting depth** in Table 6 counts nested `\\begin … \\end` environment pairs only.",
+        "- Env. **nesting depth** in Table 6 counts nested valid "
+        "``\\begin{env} ... \\\\ ... \\end{env}`` blocks only.",
         "",
         "## Duplicate detection",
         "",
@@ -508,8 +509,10 @@ def write_known_limitations_md(output_path: Path) -> None:
         "",
         "## Parse validation vs AST encoding",
         "",
-        "PosFormer encoding always runs. Brace / substructure validation may mark `parse_status != ok`",
-        "while still emitting an AST depth; treat low parse success rates as data-quality signals.",
+        "Parse OK requires **Dictionary OK** (every token in the frozen HMER vocabulary / taxonomy)",
+        "and **Structural AST OK** (balanced ``{``/``}``; structure operators must have atom or",
+        "``{group}`` arguments). PosFormer encoding always runs; low parse success rates are",
+        "data-quality signals.",
         "",
         "## Unknown tokens",
         "",

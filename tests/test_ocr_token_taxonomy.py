@@ -41,6 +41,12 @@ def test_classify_token_examples() -> None:
     assert classify_token("|") is TokenCategory.GROUPING
     assert classify_token("、") is TokenCategory.PUNCTUATION
     assert classify_token("。") is TokenCategory.PUNCTUATION
+    assert classify_token('"') is TokenCategory.PUNCTUATION
+    assert classify_token(r"\_") is TokenCategory.GROUPING
+    assert classify_token(r"\#") is TokenCategory.GROUPING
+    assert classify_token(r"\%") is TokenCategory.GROUPING
+    assert classify_token("%") is TokenCategory.OTHER
+    assert classify_token("√") is TokenCategory.SPECIAL_SYMBOL
 
 
 def test_compute_ocr_token_taxonomy_fixture(sample_benchmark_dir: Path) -> None:
@@ -79,9 +85,9 @@ def test_compute_ocr_token_taxonomy_full_benchmark() -> None:
     assert metrics.total_token_count == 3_552_617
     assert rows["latin variable tokens"][0] == 554_816
     assert rows["digit tokens"][0] == 622_006
-    assert rows["special symbol tokens"][0] == 195_215
+    assert rows["special symbol tokens"][0] == 194_436
     assert rows["operator tokens"][0] == 413_652
-    assert rows["grouping tokens"][0] == 1_085_141
+    assert rows["grouping tokens"][0] == 1_085_920
     assert rows["structural tokens"][0] == 345_162
     assert rows["CJK tokens"][0] == 257_285
     assert rows["punctuation tokens"][0] == 70_634

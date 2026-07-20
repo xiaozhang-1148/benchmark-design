@@ -24,6 +24,10 @@ from benchmark_design.report.export_details import (
     write_structure_cooccurrence_matrix_csv,
     write_structure_patterns_csv,
 )
+from benchmark_design.report.lbd_coordinate_table import (
+    write_expression_lbd_coordinate_counts_csv,
+    write_expression_structural_difficulty_counts_csv,
+)
 from benchmark_design.report.structure_complexity_table import write_structure_complexity_csv
 from benchmark_design.report.structure_distribution_table import write_structure_distribution_csv
 
@@ -64,6 +68,8 @@ CORE_TABLES: tuple[str, ...] = (
     "ast_depth_distribution.csv",
     "expression_content_summary.csv",
     "confusable_token_group_summary.csv",
+    "expression_lbd_coordinate_counts.csv",
+    "expression_structural_difficulty_counts.csv",
 )
 
 APPENDIX_TABLES: tuple[str, ...] = (
@@ -367,7 +373,7 @@ def write_confusable_token_group_summary_csv(
                 "rare_side_tokens",
             ]
         )
-        for group_metrics in metrics.all_groups():
+        for group_metrics in metrics.primary_groups:
             writer.writerow(
                 [
                     group_metrics.group.name,
@@ -401,7 +407,7 @@ def write_confusable_token_counts_appendix_csv(
                 "share_of_corpus",
             ]
         )
-        for group_metrics in metrics.all_groups():
+        for group_metrics in metrics.primary_groups:
             for token_count in group_metrics.token_counts:
                 writer.writerow(
                     [
@@ -453,7 +459,9 @@ def write_tables_readme(output_path: Path) -> None:
         "- `structure_type_distribution.csv` / `structure_combination_summary.csv` — structure metrics.",
         "- `ast_depth_summary.csv` / `ast_depth_distribution.csv` — PosFormer AST depth summary and histogram source.",
         "- `expression_content_summary.csv` — pure latex_command / pure CJK / mixed expression counts.",
-        "- `confusable_token_group_summary.csv` — Table 9 primary + appendix group metrics.",
+        "- `confusable_token_group_summary.csv` — Table 9 confusable token group metrics.",
+        "- `expression_lbd_coordinate_counts.csv` — 27-cell L/B/D coordinate counts with structural difficulty tier.",
+        "- `expression_structural_difficulty_counts.csv` — Expression-level Structural Difficulty tier counts.",
         "",
         "## Appendix (`tables/appendix/`)",
         "",
@@ -462,9 +470,13 @@ def write_tables_readme(output_path: Path) -> None:
         "- `length_distribution.csv` — per-length expression counts (long-tail curve source).",
         "- `rare_token_summary.csv` — low-frequency token listing by threshold.",
         "- `structure_pattern_distribution.csv` — structure combination pattern detail.",
-        "- `structure_cooccurrence_matrix.csv` — structure co-occurrence matrix (heatmap source); diagonal = "
-        "expressions containing the structure; off-diagonal = both; `cooccurrence_ratio` denominator = all expressions.",
+        "- `structure_cooccurrence_matrix.csv` — pairwise structure co-occurrence counts (appendix).",
+        "- `figures/structure_cooccurrence_heatmap.png` — joint distribution of structure type count "
+        "and maximum AST nesting depth in Ours (log-scaled counts; percentages over all instances).",
+        "- `figures/lbd_coordinate_examples/<L1|L2|L3|L4>/` — up to 20 OCR crop examples per tier.",
+        "- `figures/stc_high_complexity/` — top 20 NTC/CBC high-complexity expression crops.",
         "- `confusable_token_counts.csv` — Table 9 token-by-token counts for all confusable groups.",
+        "- `examples/confusable_token_4_varphi_examples.csv` — 20 sample expressions for `4` and `\\varphi` (OCR length > 3).",
         "",
         "## Cross-benchmark (`cross_benchmark/`)",
         "",
@@ -474,6 +486,7 @@ def write_tables_readme(output_path: Path) -> None:
         "- `cross_benchmark_profiles.csv` — full multi-metric profile table.",
         "- `cross_benchmark_summary.csv` — compact comparison.",
         "- `cross_benchmark_length_bins.csv` — length bins by dataset.",
+        "- `cross_benchmark_structural_difficulty.csv` — L1–L4 structural difficulty tiers by dataset.",
         "- `cross_benchmark_tokenizer_coverage.csv` — `unclassified_token_ratio` and vocab coverage.",
         "- `cross_benchmark_provenance.csv` — external dataset sources (no absolute filesystem paths).",
         "",
@@ -523,6 +536,8 @@ def write_all_tables(
         "ast_depth_distribution": tables_dir / "ast_depth_distribution.csv",
         "expression_content_summary": tables_dir / "expression_content_summary.csv",
         "confusable_token_group_summary": tables_dir / "confusable_token_group_summary.csv",
+        "expression_lbd_coordinate_counts": tables_dir / "expression_lbd_coordinate_counts.csv",
+        "expression_structural_difficulty_counts": tables_dir / "expression_structural_difficulty_counts.csv",
         "confusable_token_counts": appendix_dir / "confusable_token_counts.csv",
         "readme": tables_dir / "README.md",
     }
@@ -555,6 +570,11 @@ def write_all_tables(
     write_ast_depth_distribution_table_csv(features, paths["ast_depth_distribution"])
     write_expression_content_summary_csv(features, paths["expression_content_summary"])
     write_confusable_token_group_summary_csv(metrics.confusable, paths["confusable_token_group_summary"])
+    write_expression_lbd_coordinate_counts_csv(features, paths["expression_lbd_coordinate_counts"])
+    write_expression_structural_difficulty_counts_csv(
+        features,
+        paths["expression_structural_difficulty_counts"],
+    )
     write_confusable_token_counts_appendix_csv(metrics.confusable, paths["confusable_token_counts"])
     write_tables_readme(paths["readme"])
 

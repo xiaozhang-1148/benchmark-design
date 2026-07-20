@@ -1,0 +1,22 @@
+input_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark
+output_root: ./page_level
+
+random_seed: 42
+
+normalization:
+  dark_percentile: 1.0
+  light_percentile: 99.5
+  threshold_method: equal_image_weighted_otsu
+
+aspect_ratio_groups:
+  enabled: true
+  bins:
+    - name: portrait
+      min: 0.0
+      max: 0.90
+    - name: near_square
+      min: 0.90
+      max: 1.20
+    - name: landscape
+      min: 1.20
+      max: 999.0

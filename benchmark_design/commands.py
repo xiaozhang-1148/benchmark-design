@@ -310,7 +310,6 @@ _SPACING_PUNCT: set[str] = {
     r"\%",
     r"\quad",
     r"\qquad",
-    r"---",  # em-dash triple hyphen
     r"\dots",
     r"\cdots",
     r"\vdots",
@@ -349,6 +348,7 @@ _MISC_SYMBOLS: set[str] = {
     r"\ast",
     r"\not",
     r"\surd",
+    "√",
     r"\lfloor",
     r"\rfloor",
     r"\textreferencemark",

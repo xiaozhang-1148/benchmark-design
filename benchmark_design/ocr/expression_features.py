@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -118,13 +119,25 @@ def extract_single_features(
 def build_expression_features(
     expressions: list[ExpressionRecord],
     token_sequences: list[tuple[str, ...]],
+    *,
+    duplicate_index: DuplicateIndex | None = None,
+    rare_sets: dict[int, set[str]] | None = None,
 ) -> list[ExpressionFeatures]:
-    token_counter: Counter[str] = Counter()
-    for tokens in token_sequences:
-        token_counter.update(tokens)
+    """Build per-expression features.
 
-    duplicate_index = DuplicateIndex.from_expressions(expressions)
-    rare_sets = _build_rare_sets(token_counter)
+    Duplicate groups and rare-token sets are corpus-global. Callers that shard
+    work across workers must precompute ``duplicate_index`` / ``rare_sets`` on
+    the full corpus and pass them in; otherwise they are derived from the
+    provided lists (correct only when those lists are the full corpus).
+    """
+    if rare_sets is None:
+        token_counter: Counter[str] = Counter()
+        for tokens in token_sequences:
+            token_counter.update(tokens)
+        rare_sets = _build_rare_sets(token_counter)
+    if duplicate_index is None:
+        duplicate_index = DuplicateIndex.from_expressions(expressions)
+
     features: list[ExpressionFeatures] = []
     for index, (record, tokens) in enumerate(zip(expressions, token_sequences, strict=True)):
         features.append(
@@ -137,6 +150,17 @@ def build_expression_features(
             )
         )
     return features
+
+
+def build_corpus_feature_context(
+    expressions: Sequence[ExpressionRecord] | list[ExpressionRecord],
+    token_sequences: Sequence[tuple[str, ...]] | list[tuple[str, ...]],
+) -> tuple[DuplicateIndex, dict[int, set[str]]]:
+    """Corpus-global duplicate index and rare-token sets for feature extraction."""
+    token_counter: Counter[str] = Counter()
+    for tokens in token_sequences:
+        token_counter.update(tokens)
+    return DuplicateIndex.from_expressions(list(expressions)), _build_rare_sets(token_counter)
 
 
 def corpus_token_counter(features: list[ExpressionFeatures]) -> Counter[str]:

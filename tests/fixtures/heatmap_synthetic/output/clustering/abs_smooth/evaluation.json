@@ -1,0 +1,13 @@
+{
+  "feature": "abs_smooth",
+  "label": "墨迹密度 (d_abs_smooth)",
+  "kmeans": {
+    "best_k_by_silhouette": 3,
+    "best_silhouette": 0.4943249953353092,
+    "silhouette_at_k": {
+      "2": 0.4587145115050285,
+      "3": 0.4943249953353092
+    },
+    "low_silhouette_warning": false
+  }
+}

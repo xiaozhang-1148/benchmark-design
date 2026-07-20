@@ -85,22 +85,22 @@ def load_mne_split(root: Path, *, dataset: str) -> list[ExpressionRecord]:
     return load_caption_txt(caption_path, dataset=dataset, delimiter=" ")
 
 
-def _load_mathwriting_txt(txt_path: Path, *, dataset: str) -> list[ExpressionRecord]:
+def _load_mathwriting_txt(txt_path: Path, *, dataset: str, root: Path) -> list[ExpressionRecord]:
     latex = txt_path.read_text(encoding="utf-8").strip()
     if not latex:
         return []
-    sample_id = txt_path.stem
+    relative_key = txt_path.relative_to(root).with_suffix("").as_posix()
     source_file = str(txt_path.resolve())
     return [
         ExpressionRecord(
-            image_name=sample_id,
+            image_name=relative_key,
             block_order=0,
             line_order=0,
             block_type="",
             ocr=latex,
             dataset=dataset,
             source_file=source_file,
-            expression_id=f"{dataset}:{sample_id}",
+            expression_id=f"{dataset}:{relative_key}",
             line_id="0",
         )
     ]
@@ -111,7 +111,10 @@ def load_mathwriting(root: Path, *, dataset: str = "MathWriting") -> list[Expres
     if not txt_paths:
         msg = f"No MathWriting shard txt files under: {root}"
         raise FileNotFoundError(msg)
-    loader = lambda path: _load_mathwriting_txt(path, dataset=dataset)
+
+    def loader(path: Path) -> list[ExpressionRecord]:
+        return _load_mathwriting_txt(path, dataset=dataset, root=root)
+
     return parallel_map_flatten(
         loader,
         txt_paths,
@@ -127,6 +130,7 @@ def load_ours(input_dir: Path, *, show_progress: bool = False, workers: int | No
 
 DATASET_LOADERS: dict[str, Callable[..., list[ExpressionRecord]]] = {
     "ours": load_ours,
+    "CROHMEtrain": lambda p: load_caption_txt(p / "caption.txt", dataset="CROHMEtrain"),
     "CROHME2014": lambda p: load_caption_txt(p / "caption.txt", dataset="CROHME2014"),
     "CROHME2016": lambda p: load_caption_txt(p / "caption.txt", dataset="CROHME2016"),
     "CROHME2019": lambda p: load_caption_txt(p / "caption.txt", dataset="CROHME2019"),

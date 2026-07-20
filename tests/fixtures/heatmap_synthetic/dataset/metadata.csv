@@ -1,0 +1,11 @@
+image_id,image_path,school,correct,score,template_id,solution_type
+img_center_lo,img_center_lo.png,A,1,85,t1,center
+img_center_hi,img_center_hi.png,A,1,90,t1,center
+img_lr_lo,img_lr_lo.png,B,0,70,t1,lr
+img_lr_hi,img_lr_hi.png,B,0,75,t2,lr
+img_top_lo,img_top_lo.png,A,1,88,t2,top
+img_top_hi,img_top_hi.png,A,1,92,t2,top
+img_blank,img_blank.png,C,0,0,t1,blank
+img_center2,img_center2.png,C,0,60,t1,center
+img_lr2,img_lr2.png,A,1,80,t2,lr
+img_top2,img_top2.png,B,0,65,t2,top

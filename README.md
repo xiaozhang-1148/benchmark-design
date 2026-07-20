@@ -1,51 +1,78 @@
 # benchmark-design
 
-Benchmark dataset analysis for **HMER** (handwritten math expression recognition) and **vision** (image-side) metrics.
+Benchmark dataset analysis for **HMER** (handwritten math expression recognition) and **block-level** (image-side block annotation) metrics.
 
 ## Project layout
 
 ```
 benchmark_design/
-  config/           # shared + domain config (hmer, vision)
+  config/           # shared + domain config (hmer, block_level, project)
+  project/          # unified project export + summary.json
   hmer/             # HMER domain facade (implementation in ocr/)
   ocr/              # LaTeX tokenization, structure metrics, cross-benchmark
-  vision/           # image sample loading and visual metrics (in progress)
+  block_level/      # image sample loading and flow-structure classification
+  page_level/       # pure image-level page analysis
+  line_level/       # line-level geometry and scan quality
   io/               # shared dataset loaders
   report/           # export writers
-    vision/         # vision output layout + export pipeline
+    block_level/    # block-level output layout + export pipeline
   progress.py       # shared Rich / parallel helpers
 ```
 
 | Domain | CLI | Output root | Focus |
 |--------|-----|-------------|--------|
-| **All** | `export` | `benchmark_export/` | HMER + Vision + dataset overview |
+| **Project** | `project export` | `benchmark_export/` | HMER + page_level/* + line_level + page_level_HMER (+ optional split) |
 | HMER | `ocr …` or `hmer …` | `HMER/` | LaTeX tokens, structure, AST depth |
-| Vision | `vision export` | `vision/` | flow structure, image index |
+| Block-level | `block-level export` | `block_level/` | answer-block flow structure classification |
 
-`ocr` remains the stable command namespace; `hmer` forwards to the same subcommands.
+`ocr` remains the stable command namespace; `hmer` forwards to the same subcommands. The legacy `export` and `vision` commands remain as deprecation aliases.
 
-## Unified export (HMER + Vision + overview)
+## Project export (recommended)
 
-One command runs the full HMER export, full Vision export, and writes the dataset overview (总纲) at the top level:
+One command runs the full benchmark stack in dependency order, writes `summary.json`, `PIPELINE.md`, and the dataset overview (总纲):
 
 ```bash
-python -m benchmark_design export \
-  --input /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark \
+python -m benchmark_design project export \
+  --config config/project.yaml \
   --output ./benchmark_export
+```
+
+Full export including the Chapter 7 stratified split:
+
+```bash
+python -m benchmark_design project export \
+  --input /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark \
+  --output /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark_export \
+  --run-page-level-latex-split
 ```
 
 Output layout:
 
 ```
 benchmark_export/
-  dataset_overview.md           # 总纲
-  HMER/                         # 完整 HMER 产物（summary.md, tables/, …）
-  vision/                       # 完整 Vision 产物
+  summary.json
+  dataset_overview.md
+  PIPELINE.md                    # layer linkage and join keys
+  pipeline_manifest.json         # machine-readable stage graph
+  page_level/
+    density/                     # foreground features → split table 9
+    structure_layout/            # flow structure → split table 10
+  line_level/                    # line geometry → split tables 11
+  HMER/                          # expression stats → split table 12
+  page_level_HMER/               # page LaTeX metrics (Chapter 6); split inputs
+  page_level_latex_split/        # stratified split + Ch.7 tables/figures
+    inputs/                      # frozen CSVs from page_level_HMER
 ```
 
-Options mirror the individual pipelines (`--skip-figures`, `--skip-cross-benchmark`, `--skip-dimensions`, vision figure skips, etc.). Use `--hmer-output` / `--vision-output` to override subdirectory names.
+**Dependency order:** HMER + `page_level/density` + `page_level/structure_layout` (parallel) → `line_level` (uses density calibration) + `page_level_HMER` (parallel) → `page_level_latex_split/inputs` → `page_level_latex_split` (joins all siblings on `page_id`).
 
-The unified command loads HMER and Vision inputs once (in parallel), then runs HMER export, Vision export, and dataset overview concurrently on the shared in-memory data. Within each export pipeline, independent table/figure writers also run in parallel after metrics are computed. Cross-benchmark still loads external datasets (CROHME, HME100K, MathWriting, …) when enabled — use `--skip-cross-benchmark` to skip that phase.
+Standalone module name for page-level HMER is `page_level_latex`; the export directory is `page_level_HMER/`.
+
+Options mirror individual pipelines (`--skip-figures`, `--skip-page-level`, `--skip-line-level`, `--skip-page-level-hmer`, `--run-page-level-latex-split`, etc.). Legacy flat paths `block_level/` and top-level `page_level/tables/` remain readable via fallbacks in cross-domain joins.
+
+### Legacy unified export
+
+`python -m benchmark_design export` is a deprecated alias for `project export`.
 
 ## Full HMER benchmark export
 
@@ -81,59 +108,44 @@ python -m benchmark_design hmer export --output ./benchmark_output
 python -m benchmark_design ocr export --workers 16 --datasets CROHME2014,HME100K
 ```
 
-## Vision benchmark export
+## Block-level benchmark export
 
 ```bash
-python -m benchmark_design vision export \
+python -m benchmark_design block-level export \
   --input /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark \
-  --output ./vision
+  --output ./block_level
 ```
+
+(`vision export` is a deprecated alias.)
 
 Writes:
 
 ```
-vision/
-  vision_benchmark_summary.md
+block_level/
+  block_level_summary.md
   flow_structure_summary.md
   metadata.json
   tables/sample_index.csv
   tables/flow_structure_page_metrics.csv   # flow_group + diagnostic fields
   tables/flow_group_summary.csv          # five-class primary summary
   tables/flow_structure_block_geometry.csv
-  tables/foreground_pixel_density_page_metrics.csv
-  tables/foreground_pixel_density_block_metrics.csv
-  tables/foreground_pixel_density_region_metrics.csv
-  tables/foreground_pixel_density_overall.csv
-  tables/foreground_pixel_density_by_flow_structure.csv
-  tables/deleted_block_scale_page_metrics.csv
-  tables/deleted_block_scale_block_geometry.csv
-  metadata/foreground_pixel_density_diagnostics.json
   details/flow_structure_decisions.jsonl
-  foreground_pixel_density_summary.md
-  deleted_block_scale_summary.md
-  figures/flow_group_examples/
-  figures/d_page_density_bands.png
-  figures/d_block_density_bands.png
-  figures/density_level_comparison.png
-  figures/foreground_pixel_density/high_density_comparisons/
-  figures/deleted_block_scale/r_del_histogram.png
-  figures/deleted_block_scale/deleted_instance_histogram.png
-  figures/deleted_block_scale/high_r_del_examples/
+  figures/flow_structure/
 ```
 
-Use `--skip-flow-figures` / `--skip-foreground-load-figures` / `--skip-deleted-block-scale-figures` to skip PNG generation.
-Use `--skip-dimensions` when Pillow is unavailable (flow structure only; foreground load requires images).
+Use `--skip-flow-figures` to skip PNG generation.
+Use `--skip-dimensions` when Pillow is unavailable.
 
 ### Answer-Block Flow Structure only
 
 ```bash
-python -m benchmark_design vision flow-structure \
+python -m benchmark_design block-level flow-structure \
   --input /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark \
-  --output ./vision
+  --output ./block_level
 ```
 
 Also writes `tables/flow_group_summary.csv`, `details/flow_structure_decisions.jsonl`,
-`flow_structure_summary.md`, and optionally `figures/flow_group_examples/` mask overlays.
+`flow_structure_summary.md`, and optionally `figures/flow_structure/` mask overlays.
 
 Classifies each page into `Single-flow`, `Columnar-flow`, `Hybrid-flow`, or `NA` using
 `Txtblock` mask geometry from the benchmark JSON export (`Txtblock`, `figure`,
@@ -141,60 +153,7 @@ Classifies each page into `Single-flow`, `Columnar-flow`, `Hybrid-flow`, or `NA`
 `hybrid_reason`.
 
 Add `--skip-flow-figures` to skip overlay PNG generation.
-Add `--skip-dimensions` when Pillow is unavailable (for `vision export` only).
-
-### Effective-region foreground pixel density only
-
-```bash
-python -m benchmark_design vision foreground-load \
-  --input /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark \
-  --output ./vision
-```
-
-Computes **foreground pixel density** over annotated regions using:
-
-1. grayscale `G ∈ [0,255]`
-2. robust percentile normalization `G_tilde = clip((G-q_low)/(q_high-q_low), 0, 1)` with defaults `P1/P99`
-3. darkness map `S = 1 - G_tilde`
-4. dataset-level fixed threshold `tau_D` from pooled `S` within `R_eff` (bimodal valley → GMM intersection → pooled Otsu)
-5. foreground `{p | S(p) >= tau_D}`; density = `|F| / |mask|`
-
-Page-level density uses `R_eff = txtBlock ∪ deleted_text_block ∪ chart ∪ figure`; block-level density uses each txtBlock polygon with the same `tau_D`. Supplementary metric: **mean darkness** (`mean(S)`). **Raw Otsu Density** is exported as a non-primary baseline.
-
-Outputs include `tables/foreground_pixel_density_region_metrics.csv` (unified page/block rows) and, for samples with density > 15%, comparison sheets under `figures/foreground_pixel_density/high_density_comparisons/`. Quality-check figures (calibration histogram, sample binarizations) are written to `figures/foreground_pixel_density/quality_checks/`.
-
-The benchmark report treats foreground density as a **continuous** visual attribute (mean, median, IQR, P90, band histograms).
-Absolute low/medium/high bins and corpus tertiles are retained only in
-`metadata/foreground_pixel_density_diagnostics.json` for internal QA.
-
-Diagnostic tags include `mask_out_of_bounds`, `saturated_low`, `saturated_high`, and
-`extreme_foreground_pixel_density_candidate` (D ≥ 0.18).
-
-Add `--skip-figures` to skip CDF / histogram / example PNG generation.
-
-### Deleted-Block Scale only
-
-```bash
-python -m benchmark_design vision deleted-block-scale \
-  --input /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark \
-  --output ./vision
-```
-
-Measures the scale of visually present but task-excluded `deleted_text_block` regions relative to
-answer-related page area. Valid regions include `Txtblock`, `figure`, and `chart`; only
-`deleted_text_block` contributes to the deleted numerator.
-
-For each page:
-
-- `A_valid` = union of Txtblock, chart, and figure polygon masks
-- `A_deleted` = union of deleted_text_block polygon masks
-- `A_ans` = union(`A_valid`, `A_deleted`) — avoids double-counting cross-class overlap
-- `R_del = |A_deleted| / |A_ans|`
-
-Dataset-level deleted area ratio uses summed mask areas: `Σ|A_deleted| / Σ|A_ans|`.
-Tail cutoffs (0.2 / 0.3 / 0.5) appear as fixed checkpoint counts in the summary table.
-
-Add `--skip-figures` to skip histogram / instance-count / high-burden example PNG generation.
+Add `--skip-dimensions` when Pillow is unavailable (for `block-level export` only).
 
 ## Cross-benchmark comparison
 
@@ -265,9 +224,11 @@ python -m benchmark_design ocr longtail --output ./benchmark_output
 python -m benchmark_design ocr structure --output ./benchmark_output
 ```
 
-Matrix triggers include `\begin`, `\end`, `\\`, and matrix environment names
-(`cases`, `pmatrix`, `bmatrix`, ...). Matrix **Max Depth** counts nested
-`\begin ... \end` blocks only: each matched pair is one layer.
+Matrix triggers require a complete `\begin{env} ... \\ ... \end{env}` block where
+`env` is one of `cases`, `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `Vmatrix`,
+`matrix`, `array`, or `rcases`. Each valid block counts once. Matrix **Max Depth**
+is the maximum nesting depth of such valid blocks. PosFormer AST depth uses the
+same matrix-environment rule.
 
 ## OCR structure combination complexity
 

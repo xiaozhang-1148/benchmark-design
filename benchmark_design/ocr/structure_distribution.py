@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from benchmark_design.io.benchmark_loader import ExpressionRecord
+from benchmark_design.ocr.matrix_environments import (
+    MATRIX_ENVIRONMENT_NAMES,
+    MATRIX_STRUCTURE_TRIGGER_TOKENS,
+    expression_has_matrix_environment,
+    matrix_environment_stats,
+)
 from benchmark_design.ocr.processing_options import ProcessingOptions
 from benchmark_design.ocr.token_taxonomy import TokenCategory, classify_token
 from benchmark_design.ocr.tokenizer import build_latex_vocab, tokenize_greedy
@@ -36,47 +42,15 @@ STRUCTURE_TYPES: tuple[StructureTypeSpec, ...] = (
         frozenset({r"\int", r"\iint", r"\iiint", r"\iiiint", r"\oint"}),
     ),
     StructureTypeSpec(
-        "Matrix",
-        r"\begin, \end, \\, cases, pmatrix",
-        frozenset(
-            {
-                r"\begin",
-                r"\end",
-                r"\\",
-                "cases",
-                "pmatrix",
-                "bmatrix",
-                "Bmatrix",
-                "vmatrix",
-                "Vmatrix",
-                "matrix",
-                "array",
-                "rcases",
-            }
-        ),
+        "Env.",
+        MATRIX_STRUCTURE_TRIGGER_TOKENS,
+        MATRIX_ENVIRONMENT_NAMES,
     ),
     StructureTypeSpec("极限", r"\lim", frozenset({r"\lim", r"\limsup", r"\liminf"})),
 )
 
-MATRIX_STRUCTURE_TYPE = "Matrix"
-MATRIX_STRUCTURE_REPORT_COLUMN = "Matrix env"
-_MATRIX_STRUCTURE_SPEC = next(
-    spec for spec in STRUCTURE_TYPES if spec.structure_type == MATRIX_STRUCTURE_TYPE
-)
-MATRIX_STRUCTURE_TRIGGER_TOKENS = _MATRIX_STRUCTURE_SPEC.trigger_tokens
-
-
-def _matrix_begin_end_depth(tokens: list[str]) -> int:
-    """Matrix depth: one nested ``\\begin ... \\end`` block counts as one layer."""
-    depth = 0
-    max_depth = 0
-    for token in tokens:
-        if token == r"\begin":
-            depth += 1
-            max_depth = max(max_depth, depth)
-        elif token == r"\end":
-            depth = max(0, depth - 1)
-    return max_depth
+MATRIX_STRUCTURE_TYPE = "Env."
+MATRIX_STRUCTURE_REPORT_COLUMN = "Env."
 
 
 def _trigger_brace_depth(tokens: list[str], triggers: frozenset[str]) -> int:
@@ -94,25 +68,29 @@ def _trigger_brace_depth(tokens: list[str], triggers: frozenset[str]) -> int:
 
 def max_structure_depth(tokens: list[str], spec: StructureTypeSpec) -> int:
     if spec.structure_type == MATRIX_STRUCTURE_TYPE:
-        return _matrix_begin_end_depth(tokens)
+        return matrix_environment_stats(tokens).max_depth
     return _trigger_brace_depth(tokens, spec.triggers)
+
+
+def _structure_type_present(tokens: list[str], spec: StructureTypeSpec) -> bool:
+    if spec.structure_type == MATRIX_STRUCTURE_TYPE:
+        return expression_has_matrix_environment(tokens)
+    return any(token in spec.triggers for token in tokens)
+
+
+def _structure_occurrence_count(tokens: list[str], spec: StructureTypeSpec) -> int:
+    if spec.structure_type == MATRIX_STRUCTURE_TYPE:
+        return matrix_environment_stats(tokens).count
+    return sum(1 for token in tokens if token in spec.triggers)
 
 
 def count_structure_types_in_tokens(tokens: list[str]) -> int:
     """Return how many distinct table-6 structure types appear in *tokens*."""
-    count = 0
-    for spec in STRUCTURE_TYPES:
-        if any(token in spec.triggers for token in tokens):
-            count += 1
-    return count
+    return sum(1 for spec in STRUCTURE_TYPES if _structure_type_present(tokens, spec))
 
 
 def structure_types_present_in_tokens(tokens: list[str]) -> frozenset[str]:
-    present: set[str] = set()
-    for spec in STRUCTURE_TYPES:
-        if any(token in spec.triggers for token in tokens):
-            present.add(spec.structure_type)
-    return frozenset(present)
+    return frozenset(spec.structure_type for spec in STRUCTURE_TYPES if _structure_type_present(tokens, spec))
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +125,30 @@ class OcrStructureDistributionMetrics:
         ]
 
 
+def _accumulate_structure_stats(
+    token_list: list[str],
+    *,
+    expression_hits: Counter[str],
+    occurrence_counts: Counter[str],
+    max_depths: Counter[str],
+    structural_token_count: int,
+) -> int:
+    for token in token_list:
+        if classify_token(token) is TokenCategory.STRUCTURAL:
+            structural_token_count += 1
+
+    for spec in STRUCTURE_TYPES:
+        count = _structure_occurrence_count(token_list, spec)
+        if count:
+            occurrence_counts[spec.structure_type] += count
+            expression_hits[spec.structure_type] += 1
+        max_depths[spec.structure_type] = max(
+            max_depths[spec.structure_type],
+            max_structure_depth(token_list, spec),
+        )
+    return structural_token_count
+
+
 def compute_ocr_structure_distribution_from_token_sequences(
     token_sequences: Iterable[Sequence[str]],
 ) -> OcrStructureDistributionMetrics:
@@ -158,22 +160,13 @@ def compute_ocr_structure_distribution_from_token_sequences(
 
     for tokens in token_sequences:
         expression_count += 1
-        token_list = list(tokens)
-        per_expression_hits = {spec.structure_type: False for spec in STRUCTURE_TYPES}
-
-        for token in token_list:
-            if classify_token(token) is TokenCategory.STRUCTURAL:
-                structural_token_count += 1
-            for spec in STRUCTURE_TYPES:
-                if token in spec.triggers:
-                    occurrence_counts[spec.structure_type] += 1
-                    per_expression_hits[spec.structure_type] = True
-
-        for spec in STRUCTURE_TYPES:
-            depth = max_structure_depth(token_list, spec)
-            max_depths[spec.structure_type] = max(max_depths[spec.structure_type], depth)
-            if per_expression_hits[spec.structure_type]:
-                expression_hits[spec.structure_type] += 1
+        structural_token_count = _accumulate_structure_stats(
+            list(tokens),
+            expression_hits=expression_hits,
+            occurrence_counts=occurrence_counts,
+            max_depths=max_depths,
+            structural_token_count=structural_token_count,
+        )
 
     rows: list[StructureTypeRow] = []
     for spec in STRUCTURE_TYPES:
@@ -201,8 +194,6 @@ def compute_ocr_structure_distribution_from_token_sequences(
 def compute_ocr_structure_distribution_from_features(
     features: Sequence["ExpressionFeatures"],
 ) -> OcrStructureDistributionMetrics:
-    from benchmark_design.ocr.expression_features import ExpressionFeatures
-
     expression_hits = Counter[str]()
     occurrence_counts = Counter[str]()
     max_depths = Counter[str]()
@@ -210,18 +201,13 @@ def compute_ocr_structure_distribution_from_features(
     expression_count = len(features)
 
     for feature in features:
-        token_list = list(feature.token_sequence)
-        for token in token_list:
-            if classify_token(token) is TokenCategory.STRUCTURAL:
-                structural_token_count += 1
-            for spec in STRUCTURE_TYPES:
-                if token in spec.triggers:
-                    occurrence_counts[spec.structure_type] += 1
-
-        for structure_type in feature.structure_types:
-            expression_hits[structure_type] += 1
-        for structure_type, depth in feature.structure_max_depths.items():
-            max_depths[structure_type] = max(max_depths[structure_type], depth)
+        structural_token_count = _accumulate_structure_stats(
+            list(feature.token_sequence),
+            expression_hits=expression_hits,
+            occurrence_counts=occurrence_counts,
+            max_depths=max_depths,
+            structural_token_count=structural_token_count,
+        )
 
     rows: list[StructureTypeRow] = []
     for spec in STRUCTURE_TYPES:
@@ -259,21 +245,13 @@ def compute_ocr_structure_distribution_from_expressions(
 
     for record in expression_list:
         tokens = tokenize_greedy(record.ocr, vocab)
-        per_expression_hits = {spec.structure_type: False for spec in STRUCTURE_TYPES}
-
-        for token in tokens:
-            if classify_token(token) is TokenCategory.STRUCTURAL:
-                structural_token_count += 1
-            for spec in STRUCTURE_TYPES:
-                if token in spec.triggers:
-                    occurrence_counts[spec.structure_type] += 1
-                    per_expression_hits[spec.structure_type] = True
-
-        for spec in STRUCTURE_TYPES:
-            depth = max_structure_depth(tokens, spec)
-            max_depths[spec.structure_type] = max(max_depths[spec.structure_type], depth)
-            if per_expression_hits[spec.structure_type]:
-                expression_hits[spec.structure_type] += 1
+        structural_token_count = _accumulate_structure_stats(
+            tokens,
+            expression_hits=expression_hits,
+            occurrence_counts=occurrence_counts,
+            max_depths=max_depths,
+            structural_token_count=structural_token_count,
+        )
 
     expression_count = len(expression_list)
     rows: list[StructureTypeRow] = []

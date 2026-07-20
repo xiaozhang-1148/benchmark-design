@@ -32,6 +32,11 @@ from benchmark_design.ocr.token_taxonomy import (
     classify_token,
     compute_ocr_token_taxonomy_from_token_sequences,
 )
+from benchmark_design.ocr.lbd_coordinates import (
+    STRUCTURAL_DIFFICULTY_TIERS,
+    assign_lbd_from_feature,
+    compute_structural_difficulty_counts,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +122,7 @@ class CrossBenchmarkProfile:
     cjk_token_ratio: float
     other_unknown_token_ratio: float
     notes: str
+    structural_difficulty_counts: tuple[int, ...]
 
 
 AST_DEPTH_COUNT_LABELS: tuple[str, ...] = ("0", "1", "2", "3", "4", "≥5")
@@ -148,6 +154,12 @@ def _structure_type_count_bins(counts: Sequence[int]) -> tuple[int, ...]:
         counter.get(3, 0),
         sum(count for structure_count, count in counter.items() if structure_count >= 4),
     )
+
+
+def _structural_difficulty_count_bins(features: list[ExpressionFeatures]) -> tuple[int, ...]:
+    coordinates = [assign_lbd_from_feature(feature) for feature in features]
+    tier_counts = compute_structural_difficulty_counts(coordinates)
+    return tuple(row.count for row in tier_counts)
 
 
 def _ast_depth_count_bins(features: list[ExpressionFeatures]) -> tuple[int, ...]:
@@ -410,6 +422,7 @@ def build_cross_benchmark_profile(
         cjk_token_ratio=taxonomy_shares[6],
         other_unknown_token_ratio=taxonomy_shares[7],
         notes=notes,
+        structural_difficulty_counts=_structural_difficulty_count_bins(features),
     )
 
 

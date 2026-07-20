@@ -1,0 +1,27 @@
+input_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark
+output_root: ./line_level
+
+workers: 128  # null = auto (min(32, cpu_count*2)); override via --workers
+random_seed: 42
+
+image_extensions: [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"]
+ignore_labels: []
+
+angle_thresholds: [2, 5, 10]
+orientation_min_aspect_ratio: 2.0
+extreme_sample_count: 20
+
+# same-page unordered pair: horizontal adjacency (classic box-linking)
+height_similarity_threshold: 0.7
+vertical_overlap_ratio_threshold: 0.7
+horizontal_gap_px_threshold: 50.0
+
+# page_level FG/BG threshold for mask-outside / bbox-inside ink ratio
+calibration_path: ./page_level/calibration/calibration.json
+bbox_outside_ink_enabled: true
+
+# cross-dataset height / width / aspect-ratio (W/H) overlays
+external_dataset_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/dataset
+external_dataset_aspect_enabled: true
+
+max_inflight_pages: null

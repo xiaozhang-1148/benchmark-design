@@ -32,9 +32,17 @@ def test_build_consolidated_csv_rows_has_all_tables(sample_benchmark_dir: Path) 
 
 
 def test_write_consolidated_report(sample_benchmark_dir: Path, tmp_path: Path) -> None:
+    from benchmark_design.ocr.processing import build_enriched_corpus
+
     metrics = compute_ocr_consolidated_metrics(sample_benchmark_dir)
+    enriched = build_enriched_corpus("ours", sample_benchmark_dir)
     output_root = tmp_path / "benchmark_output"
-    paths = write_consolidated_report(metrics, output_root / "tables", output_root=output_root)
+    paths = write_consolidated_report(
+        metrics,
+        output_root / "tables",
+        output_root=output_root,
+        features=list(enriched.features),
+    )
 
     md_text = paths["markdown"].read_text(encoding="utf-8")
     assert "# OCR Benchmark Statistics Summary" in md_text
@@ -42,6 +50,8 @@ def test_write_consolidated_report(sample_benchmark_dir: Path, tmp_path: Path) -
     assert "## Table 7. Structure Combination Complexity / 结构组合复杂度" in md_text
     assert "## Table 8. Expression Content Type / 表达式内容类型" in md_text
     assert "## Table 9. Confusable Token Group Statistics / 易混 Token 组统计" in md_text
+    assert "## Table 10. Expression-level Structural Difficulty / 表达式结构难度" in md_text
+    assert "Expression-level Structural Difficulty" in md_text
     assert not (output_root / "tables" / "all_metrics_long.csv").exists()
     assert paths["metadata"].exists()
 

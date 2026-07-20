@@ -27,7 +27,9 @@ class TokenCategory(StrEnum):
     OTHER = "other / unknown tokens"
 
 
-PUNCTUATION_TOKENS: frozenset[str] = frozenset({",", ":", ".", ";", "!", "?", "'", "、", "。"})
+PUNCTUATION_TOKENS: frozenset[str] = frozenset({",", ":", ".", ";", "!", "?", "'", '"', "、", "。"})
+# Bare ``%`` (TeX comment) remains OTHER.
+LATEX_ESCAPE_GROUPING_TOKENS: frozenset[str] = frozenset({r"\_", r"\#", r"\%"})
 LAYOUT_ALIGNMENT_TOKENS: frozenset[str] = frozenset({r"\\", "&", "\\"})
 
 TOKEN_CATEGORY_ORDER: tuple[TokenCategory, ...] = (
@@ -80,6 +82,7 @@ def build_taxonomy_sets() -> dict[TokenCategory, frozenset[str]]:
             r"\rfloor",
             "''",
         }
+        | LATEX_ESCAPE_GROUPING_TOKENS
     )
 
     structural = frozenset(
@@ -132,7 +135,7 @@ def build_taxonomy_sets() -> dict[TokenCategory, frozenset[str]]:
         | cmd._ARROWS
         | cmd._MISC_SYMBOLS
         | (cmd._OPERATORS - structural_ops)
-        | (cmd._SPACING_PUNCT - {r"\\", r"\,", r"\quad", r"\qquad", r"---"})
+        | (cmd._SPACING_PUNCT - {r"\\", r"\,", r"\quad", r"\qquad"} - LATEX_ESCAPE_GROUPING_TOKENS)
         | cmd._CUSTOM_SYMBOLS
         | cmd._INCORRECT_CMD_VARIANTS
         | cmd._INCORRECT_DELETE_VARIANTS

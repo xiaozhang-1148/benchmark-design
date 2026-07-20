@@ -47,6 +47,16 @@ def test_max_nested_level_helper() -> None:
     assert max_nested_level(tokens) == 1
 
 
+def test_max_nested_level_matrix_environment() -> None:
+    encoding = _encode(r"\begin{cases} a \\ b \end{cases}")
+    assert encoding.max_nested_level == 1
+
+
+def test_max_nested_level_matrix_without_row_break() -> None:
+    encoding = _encode(r"\begin{cases} a \end{cases}")
+    assert encoding.max_nested_level == 0
+
+
 @pytest.fixture
 def sample_benchmark_dir(tmp_path: Path) -> Path:
     target = tmp_path / "sample.jpg.json"
@@ -89,14 +99,14 @@ def test_compute_ocr_ast_statistics_full_benchmark() -> None:
     metrics = compute_ocr_ast_statistics(FULL_BENCHMARK)
 
     assert metrics.expression_count == 152_113
-    assert metrics.mean_max_nested_level == pytest.approx(0.8135530822480656)
+    assert metrics.mean_max_nested_level == pytest.approx(0.8499405047563324)
     assert metrics.p50_max_nested_level == pytest.approx(1.0)
     assert metrics.p90_max_nested_level == pytest.approx(2.0)
     assert metrics.max_max_nested_level == 5
-    assert metrics.mean_token_nested_level == pytest.approx(0.3962648133735257)
-    assert metrics.nested_level_0_ratio == pytest.approx(0.3602321958018052)
-    assert metrics.nested_level_1_ratio == pytest.approx(0.48027453274868026)
-    assert metrics.nested_level_2_ratio == pytest.approx(0.14566144905432146)
-    assert metrics.nested_level_ge_3_ratio == pytest.approx(0.013831822395193047)
-    assert metrics.complex_expression_ratio == pytest.approx(0.013831822395193047)
+    assert metrics.mean_token_nested_level == pytest.approx(0.4206241273175806)
+    assert metrics.nested_level_0_ratio == pytest.approx(0.3490037011958215)
+    assert metrics.nested_level_1_ratio == pytest.approx(0.47350325087270645)
+    assert metrics.nested_level_2_ratio == pytest.approx(0.1567518883987562)
+    assert metrics.nested_level_ge_3_ratio == pytest.approx(0.02074115953271581)
+    assert metrics.complex_expression_ratio == pytest.approx(0.02074115953271581)
     assert sum(item.count for item in metrics.bins) == 152_113

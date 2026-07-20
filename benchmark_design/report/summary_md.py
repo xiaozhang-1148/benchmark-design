@@ -22,7 +22,7 @@ STRUCTURE_TYPE_SUMMARY_ORDER: tuple[str, ...] = (
     "上标",
     "下标",
     "根式",
-    "Matrix",
+    "Env.",
     "求和",
     "极限",
     "积分",
@@ -35,7 +35,7 @@ STRUCTURE_TYPE_SUMMARY_LABELS: dict[str, str] = {
     "根式": "Radical",
     "求和": "Summation",
     "积分": "Integral",
-    "Matrix": "Matrix",
+    "Env.": "Env.",
     "极限": "Limit",
 }
 
@@ -266,19 +266,21 @@ def build_benchmark_summary_markdown(
             "## 9. Confusable Token Groups",
             "",
             "Potentially confusable token groups after `LATEX_DICT` greedy tokenization. "
-            "Co-occurrence counts expressions with ≥2 distinct tokens from the same group. "
-            "See `tables/confusable_token_group_summary.csv` and "
-            "`figures/confusable_token_examples.png`.",
+            "See `tables/confusable_token_group_summary.csv`. "
+            "Example crops for `4` and `\\varphi` (20 samples, OCR length > 3): "
+            "`figures/confusable_token_examples/greek-variant/`.",
             "",
-            "| Group | Representative tokens | Token count | Expr. count | Co-occurrence expr. count |",
-            "| --- | --- | ---: | ---: | ---: |",
+            "| Group | Representative tokens | Token count | Token ratio | Expr. count | Expr. ratio |",
+            "| --- | --- | ---: | ---: | ---: | ---: |",
         ]
     )
     for group_metrics in metrics.confusable.primary_groups:
-        group_name, representatives, token_count, expr_count, co_count = group_metrics.main_table_row()
+        group_name, representatives, token_count, token_ratio, expr_count, expr_ratio = (
+            group_metrics.main_table_row()
+        )
         lines.append(
-            f"| {group_name} | `{representatives}` | {_fmt_int(token_count)} | "
-            f"{_fmt_int(expr_count)} | {_fmt_int(co_count)} |"
+            f"| {group_name} | `{representatives}` | {_fmt_int(token_count)} | {_fmt_pct(token_ratio)} | "
+            f"{_fmt_int(expr_count)} | {_fmt_pct(expr_ratio)} |"
         )
 
     lines.append("")

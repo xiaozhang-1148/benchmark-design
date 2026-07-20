@@ -11,7 +11,7 @@ from benchmark_design.report.dataset_overview import (
     run_dataset_overview_export,
     write_dataset_overview,
 )
-from benchmark_design.vision.processing_options import VisionProcessingOptions
+from benchmark_design.block_level.processing_options import VisionProcessingOptions
 
 SAMPLE_PAGE = Path(__file__).parent / "fixtures" / "sample_page.json"
 FLOW_PAGE = Path(__file__).parent / "fixtures" / "flow_structure_page.json"
@@ -84,19 +84,19 @@ def test_run_dataset_overview_export_layout(tmp_path: Path) -> None:
     assert "| 纵向图像数量 |" in overview_text
     assert "| 横向图像数量 |" in overview_text
     assert "## 明细" in overview_text
-    assert "vision/overview.md" in overview_text
+    assert "block_level/overview.md" in overview_text
 
     hmer_overview = output_root / "HMER" / "overview.md"
-    vision_overview = output_root / "vision" / "overview.md"
+    block_level_overview = output_root / "block_level" / "overview.md"
     block_overview = output_root / "block" / "overview.md"
     assert hmer_overview.is_file()
-    assert vision_overview.is_file()
+    assert block_level_overview.is_file()
     assert block_overview.is_file()
     assert (output_root / "HMER" / "tables" / "hmer_scale.csv").is_file()
     assert (output_root / "block" / "tables" / "block_counts.csv").is_file()
-    assert (output_root / "vision" / "tables" / "aspect_ratio_distribution.csv").is_file()
-    assert (output_root / "vision" / "tables" / "resolution_distribution.csv").is_file()
-    assert (output_root / "vision" / "tables" / "orientation_distribution.csv").is_file()
+    assert (output_root / "block_level" / "tables" / "aspect_ratio_distribution.csv").is_file()
+    assert (output_root / "block_level" / "tables" / "resolution_distribution.csv").is_file()
+    assert (output_root / "block_level" / "tables" / "orientation_distribution.csv").is_file()
 
 
 def test_write_dataset_overview_empty_input(tmp_path: Path) -> None:

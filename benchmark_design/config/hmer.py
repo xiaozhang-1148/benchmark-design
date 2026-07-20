@@ -5,15 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 DEFAULT_BENCHMARK_INPUT = Path(
-    "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark"
+    "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark"
 )
 
 CROSS_BENCHMARK_ROOT = Path(
-    "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/dataset"
+    "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/dataset"
 )
 
 CROSS_BENCHMARK_SETS: dict[str, Path] = {
     "ours": DEFAULT_BENCHMARK_INPUT,
+    "CROHMEtrain": CROSS_BENCHMARK_ROOT / "CROHME" / "train",
     "CROHME2014": CROSS_BENCHMARK_ROOT / "CROHME" / "2014",
     "CROHME2016": CROSS_BENCHMARK_ROOT / "CROHME" / "2016",
     "CROHME2019": CROSS_BENCHMARK_ROOT / "CROHME" / "2019",
@@ -25,7 +26,8 @@ CROSS_BENCHMARK_SETS: dict[str, Path] = {
 }
 
 CROSS_BENCHMARK_REPORT_GROUPS: dict[str, tuple[str, ...]] = {
-    "CROHME": ("CROHME2014", "CROHME2016", "CROHME2019"),
+    # Full CROHME: shared train + year test splits (2014/2016/2019).
+    "CROHME": ("CROHMEtrain", "CROHME2014", "CROHME2016", "CROHME2019"),
     "HME100K": ("HME100K",),
     "MathWriting": ("MathWriting",),
     "MNE": ("MNE_N1", "MNE_N2", "MNE_N3"),
@@ -41,7 +43,7 @@ CROSS_BENCHMARK_REPORT_ORDER: tuple[str, ...] = (
 )
 
 CROSS_BENCHMARK_NOTES: dict[str, str] = {
-    "CROHME": "mostly formula-centric",
+    "CROHME": "mostly formula-centric; train + 2014/2016/2019 test",
     "HME100K": "formula-centric",
     "MathWriting": "clean writing-oriented",
     "MNE": "level-based formula difficulty",
@@ -56,6 +58,14 @@ CROSS_BENCHMARK_PROVENANCE: tuple[dict[str, str], ...] = (
         "source": "internal benchmark JSON export",
         "license_or_access": "internal",
         "preprocessing_note": "Unified JSON page format; OCR LaTeX normalized by benchmark loader",
+    },
+    {
+        "dataset": "CROHMEtrain",
+        "version_or_year": "train",
+        "split": "train",
+        "source": "CROHME",
+        "license_or_access": "research use (CROHME terms)",
+        "preprocessing_note": "Shared CROHME train caption.txt; same LATEX_DICT tokenizer",
     },
     {
         "dataset": "CROHME2014",
@@ -84,18 +94,18 @@ CROSS_BENCHMARK_PROVENANCE: tuple[dict[str, str], ...] = (
     {
         "dataset": "HME100K",
         "version_or_year": "HME100K",
-        "split": "test",
+        "split": "train",
         "source": "HME100K",
         "license_or_access": "dataset-specific terms",
-        "preprocessing_note": "Converted to unified JSON; same LATEX_DICT tokenizer",
+        "preprocessing_note": "Loads provided train.txt only (no other split present on disk); same LATEX_DICT tokenizer",
     },
     {
         "dataset": "MathWriting",
         "version_or_year": "MathWriting",
-        "split": "test",
+        "split": "train+val",
         "source": "MathWritting (processed folder name)",
         "license_or_access": "dataset-specific terms",
-        "preprocessing_note": "Converted to unified JSON; same LATEX_DICT tokenizer",
+        "preprocessing_note": "Loads train/ and val/ shard txt files (no test/ on disk); same LATEX_DICT tokenizer",
     },
     {
         "dataset": "MNE_N1",

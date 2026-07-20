@@ -33,17 +33,35 @@ def test_max_structure_depth_nested_fraction() -> None:
 
 def test_max_structure_depth_matrix_environment() -> None:
     tokens = [r"\begin", "{", "cases", "}", "a", r"\\", "b", r"\end", "{", "cases", "}"]
-    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "Matrix")
+    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "Env.")
     assert max_structure_depth(tokens, spec) == 1
+
+
+def test_max_structure_depth_matrix_without_row_break() -> None:
+    tokens = [r"\begin", "{", "cases", "}", "a", r"\end", "{", "cases", "}"]
+    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "Env.")
+    assert max_structure_depth(tokens, spec) == 0
+
+
+def test_matrix_occurrence_counts_complete_environment_only() -> None:
+    tokens = [r"\begin", "{", "cases", "}", "a", r"\\", "b", r"\end", "{", "cases", "}"]
+    from benchmark_design.ocr.structure_distribution import compute_ocr_structure_distribution_from_token_sequences
+
+    metrics = compute_ocr_structure_distribution_from_token_sequences([tokens])
+    matrix_row = next(row for row in metrics.rows if row.structure_type == "Env.")
+    assert matrix_row.occurrence_count == 1
+    assert matrix_row.expression_count == 1
 
 
 def test_max_structure_depth_nested_matrix() -> None:
     tokens = [
         r"\begin", "{", "cases", "}",
-        r"\begin", "{", "pmatrix", "}", "a", r"\end", "{", "pmatrix", "}",
+        r"\begin", "{", "pmatrix", "}", "a", r"\\", "b", r"\end", "{", "pmatrix", "}",
+        r"\\",
+        "c",
         r"\end", "{", "cases", "}",
     ]
-    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "Matrix")
+    spec = next(s for s in STRUCTURE_TYPES if s.structure_type == "Env.")
     assert max_structure_depth(tokens, spec) == 2
 
 
@@ -58,7 +76,7 @@ def test_compute_ocr_structure_distribution_fixture(sample_benchmark_dir: Path) 
     assert rows["下标"].max_depth == 1
     assert rows["下标"].occurrence_count == 4
     assert rows["分式"].expression_ratio == 0.0
-    assert rows["Matrix"].expression_ratio == 0.0
+    assert rows["Env."].expression_ratio == 0.0
     assert rows["积分"].occurrence_count == 0
 
 
@@ -93,8 +111,8 @@ def test_compute_ocr_structure_distribution_full_benchmark() -> None:
     assert rows["根式"].expression_ratio == pytest.approx(0.12046307679159572)
     assert rows["根式"].occurrence_count == 28_037
     assert rows["积分"].occurrence_count == 0
-    assert rows["Matrix"].expression_ratio == pytest.approx(0.038274177749436276)
-    assert rows["Matrix"].occurrence_ratio == pytest.approx(0.10316894675543657)
-    assert rows["Matrix"].max_depth == 2
-    assert rows["Matrix"].occurrence_count == 35_610
+    assert rows["Env."].expression_ratio == pytest.approx(0.03819528902855114)
+    assert rows["Env."].occurrence_ratio == pytest.approx(0.01992977210701062)
+    assert rows["Env."].max_depth == 2
+    assert rows["Env."].occurrence_count == 6_879
     assert rows["极限"].occurrence_count == 74

@@ -9,7 +9,12 @@ from pathlib import Path
 
 from benchmark_design.io.benchmark_loader import ExpressionRecord, iter_benchmark_json_paths, load_expressions
 from benchmark_design.io.dataset_loaders import load_dataset
-from benchmark_design.ocr.expression_features import ExpressionFeatures, build_expression_features
+from benchmark_design.ocr.expression_features import (
+    ExpressionFeatures,
+    build_corpus_feature_context,
+    build_expression_features,
+    extract_single_features,
+)
 from benchmark_design.ocr.processing_options import ProcessingOptions
 from benchmark_design.ocr.tokenizer import build_latex_vocab, tokenize_greedy
 from benchmark_design.progress import parallel_map
@@ -81,10 +86,27 @@ def tokenize_expressions_parallel(
 
 
 def _feature_chunk(
-    args: tuple[tuple[ExpressionRecord, ...], tuple[tuple[str, ...], ...]],
+    args: tuple[
+        tuple[ExpressionRecord, ...],
+        tuple[tuple[str, ...], ...],
+        tuple[int, ...],
+        tuple[int, ...],
+        dict[int, set[str]],
+    ],
 ) -> list[ExpressionFeatures]:
-    records, tokens = args
-    return build_expression_features(list(records), list(tokens))
+    records, tokens, group_ids, group_sizes, rare_sets = args
+    return [
+        extract_single_features(
+            record,
+            token_seq,
+            duplicate_group_id=group_id,
+            duplicate_count=group_size,
+            rare_sets=rare_sets,
+        )
+        for record, token_seq, group_id, group_size in zip(
+            records, tokens, group_ids, group_sizes, strict=True
+        )
+    ]
 
 
 def extract_features_parallel(
@@ -92,15 +114,50 @@ def extract_features_parallel(
     token_sequences: Sequence[tuple[str, ...]],
     options: ProcessingOptions,
 ) -> tuple[ExpressionFeatures, ...]:
+    """Extract features with corpus-global duplicate / rare-token labels.
+
+    Worker sharding must not recompute those labels per chunk, otherwise
+    ``is_duplicate`` / ``has_rare_*`` depend on worker count.
+    """
     if not expressions:
         return ()
 
-    chunks = _chunk_records(expressions, workers=options.worker_count)
-    token_chunks = _chunk_records(list(token_sequences), workers=options.worker_count)
-    paired = list(zip(chunks, token_chunks, strict=True))
+    expression_list = list(expressions)
+    token_list = list(token_sequences)
+    if len(expression_list) != len(token_list):
+        msg = (
+            f"expression/token length mismatch: {len(expression_list)} vs {len(token_list)}"
+        )
+        raise ValueError(msg)
 
-    if len(paired) == 1 and options.worker_count <= 1:
-        return tuple(build_expression_features(list(expressions), list(token_sequences)))
+    if options.worker_count <= 1:
+        return tuple(build_expression_features(expression_list, token_list))
+
+    duplicate_index, rare_sets = build_corpus_feature_context(expression_list, token_list)
+    record_chunks = _chunk_records(expression_list, workers=options.worker_count)
+    token_chunks = _chunk_records(token_list, workers=options.worker_count)
+    paired: list[
+        tuple[
+            tuple[ExpressionRecord, ...],
+            tuple[tuple[str, ...], ...],
+            tuple[int, ...],
+            tuple[int, ...],
+            dict[int, set[str]],
+        ]
+    ] = []
+    offset = 0
+    for records, tokens in zip(record_chunks, token_chunks, strict=True):
+        end = offset + len(records)
+        paired.append(
+            (
+                records,
+                tokens,
+                tuple(duplicate_index.group_id_by_index[offset:end]),
+                tuple(duplicate_index.group_size_by_index[offset:end]),
+                rare_sets,
+            )
+        )
+        offset = end
 
     feature_chunks = parallel_map(
         _feature_chunk,

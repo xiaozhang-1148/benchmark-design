@@ -6,16 +6,16 @@ import csv
 import shutil
 from pathlib import Path
 
-from benchmark_design.report.vision.flow_structure_export import (
+from benchmark_design.report.block_level.flow_structure_export import (
     PAGE_METRICS_COLUMNS,
     write_flow_group_summary_csv,
     write_flow_structure_page_metrics_csv,
 )
-from benchmark_design.report.vision.flow_structure_figures import export_flow_structure_figures
-from benchmark_design.vision.flow_structure.classifier import classify_page_flow_structure
-from benchmark_design.vision.flow_structure.flow_group import derive_flow_group_fields
-from benchmark_design.vision.flow_structure.models import PageAnnotation, PageBlockAnnotation
-from benchmark_design.vision.flow_structure.page_loader import _load_page_annotation
+from benchmark_design.report.block_level.flow_structure_figures import export_flow_structure_figures
+from benchmark_design.block_level.flow_structure.classifier import classify_page_flow_structure
+from benchmark_design.block_level.flow_structure.flow_group import derive_flow_group_fields
+from benchmark_design.block_level.flow_structure.models import PageAnnotation, PageBlockAnnotation
+from benchmark_design.block_level.flow_structure.page_loader import _load_page_annotation
 
 
 def _page(

@@ -1,0 +1,27 @@
+group_id,group_name,subgroup_id,token,token_display,source,note
+digit-letter,digit-letter,1_l,1,1,HMER benchmark,digit-letter
+digit-letter,digit-letter,1_l,l,l,HMER benchmark,digit-letter
+digit-letter,digit-letter,2_z,2,2,HMER benchmark,digit-letter
+digit-letter,digit-letter,2_z,z,z,HMER benchmark,digit-letter
+digit-letter,digit-letter,5_s,5,5,HMER benchmark,digit-letter
+digit-letter,digit-letter,5_s,s,s,HMER benchmark,digit-letter
+digit-letter,digit-letter,6_b,6,6,HMER benchmark,digit-letter
+digit-letter,digit-letter,6_b,b,b,HMER benchmark,digit-letter
+digit-letter,digit-letter,9_g_q,9,9,HMER benchmark,digit-letter
+digit-letter,digit-letter,9_g_q,g,g,HMER benchmark,digit-letter
+digit-letter,digit-letter,9_g_q,q,q,HMER benchmark,digit-letter
+circle-like,circle-like,0_o_theta,0,0,HMER benchmark,circle-like
+circle-like,circle-like,0_o_theta,o,o,HMER benchmark,circle-like
+circle-like,circle-like,0_o_theta,\theta,\theta,HMER benchmark,circle-like
+latin-greek,latin-greek,p_rho,p,p,HMER benchmark,latin-greek
+latin-greek,latin-greek,p_rho,\rho,\rho,HMER benchmark,latin-greek
+latin-greek,latin-greek,u_mu,u,u,HMER benchmark,latin-greek
+latin-greek,latin-greek,u_mu,\mu,\mu,HMER benchmark,latin-greek
+digit-greek,digit-greek,4_varphi,4,4,handwriting shape study,digit-greek
+digit-greek,digit-greek,4_varphi,\varphi,\varphi,handwriting shape study,digit-greek
+operator-variable,operator-variable,x_times,x,x,HMER benchmark,operator-variable
+operator-variable,operator-variable,x_times,\times,\times,HMER benchmark,operator-variable
+relation-stroke,relation-stroke,lt_leq,<,<,HMER benchmark,relation-stroke
+relation-stroke,relation-stroke,lt_leq,\leq,\leq,HMER benchmark,relation-stroke
+relation-stroke,relation-stroke,gt_geq,>,>,HMER benchmark,relation-stroke
+relation-stroke,relation-stroke,gt_geq,\geq,\geq,HMER benchmark,relation-stroke

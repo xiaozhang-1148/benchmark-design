@@ -71,6 +71,7 @@ def _make_profile(**overrides: object) -> CrossBenchmarkProfile:
         "cjk_token_ratio": 0.1,
         "other_unknown_token_ratio": 0.0,
         "notes": "",
+        "structural_difficulty_counts": (50, 20, 20, 10),
     }
     defaults.update(overrides)
     return CrossBenchmarkProfile(**defaults)  # type: ignore[arg-type]
@@ -94,12 +95,22 @@ def test_structure_combination_uses_structured_denominator() -> None:
     assert "| Ours | 65 (65.00%) | 40 (61.54%) | 15 (23.08%) | 7 (10.77%) | 3 (4.62%) | 4 (6.15%) |" in text
 
 
+def test_structural_difficulty_section_in_markdown() -> None:
+    profiles = [
+        _make_profile(display_name="Sample"),
+        _make_profile(display_name="Ours"),
+    ]
+    text = build_cross_benchmark_comparison_markdown(profiles)
+    assert "## 7. Expression-level Structural Difficulty (L1–L4)" in text
+    assert "| Sample | 50 (50.00%) | 20 (20.00%) | 20 (20.00%) | 10 (10.00%) |" in text
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(not FULL_BENCHMARK.is_dir(), reason="full benchmark dataset unavailable")
 def test_cross_benchmark_profiles_ours_values() -> None:
     profiles = compute_cross_benchmark_profiles(processing=ProcessingOptions(show_progress=False))
     ours = next(profile for profile in profiles if profile.display_name == "Ours")
-    assert ours.expression_count == 152_113
+    assert ours.expression_count == 152_012
     assert ours.unique_expression_count == 120_322
     assert ours.duplicate_rate == pytest.approx(0.208996, rel=1e-4)
     assert ours.vocabulary_size == 1_005
@@ -116,20 +127,20 @@ def test_cross_benchmark_comparison_markdown_structure(tmp_path: Path) -> None:
 
     assert text.startswith("# Cross-Benchmark Comparison\n")
     assert "## 1. Dataset Scale and Effective Diversity" in text
-    assert "## 9. Summary of Advantages" in text
+    assert "## 10. Summary of Advantages" in text
     assert "## 5. Structure Combination" in text
     assert "Matrix/Layout" not in text
     assert "1 Structure Type" in text
     assert "Any Structure ≥1" in text
     assert "≥4 Structure Types" in text
-    assert "Matrix env" in text
-    assert "Do **not** sum **Matrix env**" in text
+    assert "Env." in text
+    assert "Do **not** sum **Env.**" in text
     assert "Multi-Struct ≥2" not in text
     assert "## 6. AST Depth Distribution" in text
+    assert "## 7. Expression-level Structural Difficulty (L1–L4)" in text
     assert "depth 0" in text
     assert "count (share%)" in text
     assert "## 8. Token Taxonomy Composition" in text
-    assert "Total tokens" in text
     assert "count (share%)" in text
     assert "Latin variable" in text
     assert "Mixed Text-Math Expr. Ratio" not in text

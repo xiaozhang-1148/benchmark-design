@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from benchmark_design.ocr.matrix_environments import find_valid_matrix_environment_span
+
 FRACTION_TRIGGERS: frozenset[str] = frozenset({r"\frac", r"\dfrac", r"\tfrac", r"\cfrac"})
 SUPERSCRIPT_TRIGGERS: frozenset[str] = frozenset({"^"})
 SUBSCRIPT_RADICAL_TRIGGERS: frozenset[str] = frozenset({"_", r"\sqrt"})
@@ -106,6 +108,16 @@ def _sequence_to_substruct(
 ) -> None:
     index = start
     while index < end:
+        matrix_span = find_valid_matrix_environment_span(tokens, index)
+        if matrix_span is not None:
+            body_start, end_begin, after_block = matrix_span
+            body_end = end_begin - 1
+            if body_start <= body_end:
+                _append_identifier(identifiers, body_start, body_end, "L")
+                _sequence_to_substruct(tokens, identifiers, body_start, end_begin)
+            index = after_block
+            continue
+
         token = tokens[index]
         if token in SINGLE_ARG_TRIGGERS:
             sub_end = _find_single_arg_substructure_end(tokens, index)

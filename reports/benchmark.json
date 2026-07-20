@@ -1,0 +1,47 @@
+{
+  "best_config": {
+    "max_num_seqs": 4,
+    "gpu_memory_utilization": 0.85,
+    "prefetch_workers": 8,
+    "images_per_sec": 0.0
+  },
+  "trials": [
+    {
+      "max_num_seqs": 2,
+      "gpu_memory_utilization": 0.8,
+      "prefetch_workers": 4,
+      "ok": false,
+      "error": "RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}",
+      "images_per_sec": 0.0,
+      "failure_rate": 1.0
+    },
+    {
+      "max_num_seqs": 2,
+      "gpu_memory_utilization": 0.85,
+      "prefetch_workers": 4,
+      "ok": false,
+      "error": "RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}",
+      "images_per_sec": 0.0,
+      "failure_rate": 1.0
+    },
+    {
+      "max_num_seqs": 4,
+      "gpu_memory_utilization": 0.8,
+      "prefetch_workers": 4,
+      "ok": false,
+      "error": "RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}",
+      "images_per_sec": 0.0,
+      "failure_rate": 1.0
+    },
+    {
+      "max_num_seqs": 4,
+      "gpu_memory_utilization": 0.85,
+      "prefetch_workers": 4,
+      "ok": false,
+      "error": "RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}",
+      "images_per_sec": 0.0,
+      "failure_rate": 1.0
+    }
+  ],
+  "sample_size_requested": 8
+}

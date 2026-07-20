@@ -4,10 +4,23 @@ from __future__ import annotations
 
 import argparse
 import sys
+import warnings
 from pathlib import Path
 
-from benchmark_design.config import DEFAULT_BENCHMARK_INPUT, DEFAULT_OUTPUT_ROOT, DEFAULT_UNIFIED_OUTPUT_ROOT
-from benchmark_design.config.vision import DEFAULT_VISION_INPUT, DEFAULT_VISION_OUTPUT_ROOT
+from benchmark_design.config.line_level import DEFAULT_LINE_LEVEL_OUTPUT
+from benchmark_design.config.page_level import DEFAULT_PAGE_LEVEL_OUTPUT
+from benchmark_design.config import DEFAULT_BENCHMARK_INPUT, DEFAULT_OUTPUT_ROOT, DEFAULT_PROJECT_OUTPUT_ROOT
+from benchmark_design.config.page_level_latex import DEFAULT_PAGE_LEVEL_LATEX_OUTPUT
+from benchmark_design.config.page_level_latex_split import (
+    DEFAULT_PAGE_LEVEL_LATEX_SPLIT_CONFIG,
+    DEFAULT_PAGE_LEVEL_LATEX_SPLIT_OUTPUT,
+)
+from benchmark_design.config.block_level import (
+    DEFAULT_BLOCK_LEVEL_INPUT,
+    DEFAULT_BLOCK_LEVEL_OUTPUT_ROOT,
+    DEFAULT_VISION_INPUT,
+    DEFAULT_VISION_OUTPUT_ROOT,
+)
 from benchmark_design.ocr.processing import ProcessingOptions
 from benchmark_design.ocr.consolidated import compute_ocr_consolidated_metrics
 from benchmark_design.ocr.ast_statistics import compute_ocr_ast_statistics
@@ -24,12 +37,19 @@ from benchmark_design.report.cross_benchmark_table import write_cross_benchmark_
 from benchmark_design.report.export_pipeline import run_benchmark_export
 from benchmark_design.report.dataset_overview import run_dataset_overview_export
 from benchmark_design.report.unified_export import run_unified_benchmark_export
-from benchmark_design.report.vision.export_pipeline import run_vision_benchmark_export
-from benchmark_design.report.vision.flow_structure_export import (
+from benchmark_design.project.export import run_project_export
+from benchmark_design.project.config import load_project_config
+from benchmark_design.report.line_level.export_pipeline import run_line_level_export
+from benchmark_design.report.line_level.error_visualization import export_line_validation_error_figures
+from benchmark_design.line_level.config import load_line_level_config
+from benchmark_design.report.page_level.export_pipeline import run_page_level_export
+from benchmark_design.page_level_latex.pipeline import run_page_level_latex_export
+from benchmark_design.report.block_level.export_pipeline import run_block_level_export
+from benchmark_design.report.block_level.flow_structure_export import (
     write_flow_structure_block_geometry_csv,
     write_flow_structure_page_metrics_csv,
 )
-from benchmark_design.vision.flow_structure.pipeline import compute_flow_structure_results
+from benchmark_design.block_level.flow_structure.pipeline import compute_flow_structure_results
 from benchmark_design.report.length_bins_table import write_length_bins_report
 from benchmark_design.report.length_table import write_length_report
 from benchmark_design.report.output_layout import tables_dir
@@ -38,7 +58,217 @@ from benchmark_design.report.structure_complexity_table import write_structure_c
 from benchmark_design.report.structure_distribution_table import write_structure_distribution_report
 from benchmark_design.report.token_longtail_table import write_token_longtail_report
 from benchmark_design.report.token_taxonomy_table import write_token_taxonomy_report
-from benchmark_design.vision.processing_options import VisionProcessingOptions
+from benchmark_design.block_level.processing_options import BlockLevelProcessingOptions, VisionProcessingOptions
+
+
+def _warn_vision_deprecated(command: str) -> None:
+    warnings.warn(
+        f"`{command}` is deprecated; use `block-level` or `project export` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+
+def _add_unified_export_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_BENCHMARK_INPUT,
+        help="Benchmark JSON input directory (shared by all pipelines)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_PROJECT_OUTPUT_ROOT,
+        help="Output root (writes summary.json, dataset_overview.md, HMER/, page_level/, …)",
+    )
+    parser.add_argument(
+        "--hmer-output",
+        type=Path,
+        default=None,
+        help="HMER output directory (default: {output}/HMER)",
+    )
+    parser.add_argument(
+        "--block-level-output",
+        "--vision-output",
+        type=Path,
+        default=None,
+        dest="block_level_output",
+        help="Block-level / structure_layout output directory (default: {output}/block_level/structure_layout)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker threads",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable Rich progress bars",
+    )
+    parser.add_argument(
+        "--skip-dimensions",
+        action="store_true",
+        help="Skip reading image width/height from files for block-level metrics",
+    )
+    parser.add_argument(
+        "--skip-figures",
+        action="store_true",
+        help="Skip all figure generation (HMER matplotlib + block-level overlays)",
+    )
+    parser.add_argument(
+        "--skip-cross-benchmark",
+        action="store_true",
+        help="Skip cross-benchmark comparison tables",
+    )
+    parser.add_argument(
+        "--datasets",
+        default=None,
+        help="Comma-separated cross-benchmark datasets (default: all configured)",
+    )
+    parser.add_argument(
+        "--skip-flow-figures",
+        action="store_true",
+        help="Skip flow structure review overlay PNGs only",
+    )
+    parser.add_argument(
+        "--page-level-output",
+        type=Path,
+        default=None,
+        help="Page-level output directory (default: {output}/page_level)",
+    )
+    parser.add_argument(
+        "--skip-page-level",
+        action="store_true",
+        help="Skip page-level pure image analysis export",
+    )
+    parser.add_argument(
+        "--skip-page-level-figures",
+        action="store_true",
+        help="Skip page-level QA and paper figures only",
+    )
+    parser.add_argument(
+        "--page-level-config",
+        type=Path,
+        default=None,
+        help="Optional YAML config for page-level export",
+    )
+    parser.add_argument(
+        "--line-level-output",
+        type=Path,
+        default=None,
+        help="Line-level output directory (default: {output}/line_level)",
+    )
+    parser.add_argument(
+        "--skip-line-level",
+        action="store_true",
+        help="Skip line-level feature analysis export",
+    )
+    parser.add_argument(
+        "--skip-line-level-figures",
+        action="store_true",
+        help="Skip line-level plots and sample overlays only",
+    )
+    parser.add_argument(
+        "--line-level-config",
+        type=Path,
+        default=None,
+        help="Optional YAML config for line-level export",
+    )
+    parser.add_argument(
+        "--skip-page-level-hmer",
+        action="store_true",
+        help="Skip page-level LaTeX / HMER bridge export (page_level_HMER/)",
+    )
+    parser.add_argument(
+        "--skip-page-level-hmer-figures",
+        action="store_true",
+        help="Skip page_level_HMER figure generation only",
+    )
+    parser.add_argument(
+        "--run-page-level-latex-split",
+        action="store_true",
+        help="Run stratified split after export (writes page_level_latex_split/)",
+    )
+    parser.add_argument(
+        "--page-level-latex-split-config",
+        type=Path,
+        default=DEFAULT_PAGE_LEVEL_LATEX_SPLIT_CONFIG,
+        help="YAML config for page_level_latex_split",
+    )
+    parser.add_argument(
+        "--skip-page-level-latex-split-figures",
+        action="store_true",
+        help="Skip Chapter 7 split figures only",
+    )
+    parser.add_argument(
+        "--allow-split-acceptance-failure",
+        action="store_true",
+        help="Do not fail project export when split acceptance checks fail",
+    )
+
+
+def _run_project_like_export(args: argparse.Namespace) -> int:
+    processing = ProcessingOptions(
+        show_progress=not args.no_progress,
+        workers=args.workers,
+    )
+    block_level_processing = BlockLevelProcessingOptions(
+        show_progress=not args.no_progress,
+        workers=args.workers,
+        read_image_dimensions=not args.skip_dimensions,
+    )
+    cross_datasets = None
+    if args.datasets:
+        cross_datasets = [name.strip() for name in args.datasets.split(",") if name.strip()]
+    skip_all_figures = args.skip_figures
+    result = run_project_export(
+        args.input,
+        args.output,
+        hmer_output=args.hmer_output,
+        block_level_output=args.block_level_output,
+        page_level_output=args.page_level_output,
+        processing=processing,
+        block_level_processing=block_level_processing,
+        skip_hmer_figures=skip_all_figures,
+        skip_cross_benchmark=args.skip_cross_benchmark,
+        cross_benchmark_datasets=cross_datasets,
+        skip_flow_figures=skip_all_figures or args.skip_flow_figures,
+        skip_page_level=args.skip_page_level,
+        skip_page_level_figures=skip_all_figures or args.skip_page_level_figures,
+        page_level_config=args.page_level_config,
+        skip_line_level=args.skip_line_level,
+        skip_line_level_figures=skip_all_figures or args.skip_line_level_figures,
+        line_level_config=args.line_level_config,
+        line_level_output=args.line_level_output,
+        skip_page_level_hmer=args.skip_page_level_hmer,
+        skip_page_level_hmer_figures=skip_all_figures or args.skip_page_level_hmer_figures,
+        skip_page_level_latex_split=not args.run_page_level_latex_split,
+        page_level_latex_split_config=args.page_level_latex_split_config,
+        skip_page_level_latex_split_figures=skip_all_figures or args.skip_page_level_latex_split_figures,
+        allow_split_acceptance_failure=args.allow_split_acceptance_failure,
+    )
+    print(f"wrote project export under {result.output_root.resolve()}")
+    print(f"summary.json: {result.summary_json.resolve()}")
+    print(f"PIPELINE.md: {result.pipeline_doc.resolve()}")
+    print(f"HMER: {result.hmer_output.resolve()}")
+    print(f"Structure layout: {result.structure_layout_output.resolve()}")
+    if result.density_output is not None:
+        print(f"Page density: {result.density_output.resolve()}")
+    if result.line_level_output is not None:
+        print(f"Line-level: {result.line_level_output.resolve()}")
+    if result.page_level_hmer_output is not None:
+        print(f"Page-level HMER: {result.page_level_hmer_output.resolve()}")
+    if result.page_level_latex_split_output is not None:
+        print(f"Split: {result.page_level_latex_split_output.resolve()}")
+    print(f"dataset overview: {result.dataset_overview.resolve()}")
+    print(f"HMER detail: {(result.hmer_output / 'summary.md').resolve()}")
+    print(
+        "Structure layout detail: "
+        f"{(result.structure_layout_output / 'block_level_summary.md').resolve()}"
+    )
+    return 0
 
 
 def _format_ast_value(metric: str, value: float | int) -> str:
@@ -289,7 +519,7 @@ def _build_parser() -> argparse.ArgumentParser:
     overview_sub = overview_parser.add_subparsers(dest="overview_command", required=True)
     overview_export_parser = overview_sub.add_parser(
         "export",
-        help="Write dataset overview to output root with HMER/ and vision/ subdirectories",
+        help="Write dataset overview to output root with HMER/ and block_level/ subdirectories",
     )
     overview_export_parser.add_argument(
         "--input",
@@ -301,7 +531,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT_ROOT,
-        help="Output root directory (writes dataset_overview.md, HMER/, vision/)",
+        help="Output root directory (writes dataset_overview.md, HMER/, block_level/)",
     )
     overview_export_parser.add_argument(
         "--workers",
@@ -320,7 +550,54 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip reading image width/height from files (infer from annotations)",
     )
 
-    vision_parser = subparsers.add_parser("vision", help="Vision / image-side benchmark analysis")
+    block_level_parser = subparsers.add_parser("block-level", help="Block-level image-side benchmark analysis")
+    block_level_sub = block_level_parser.add_subparsers(dest="block_level_command", required=True)
+    block_level_export_parser = block_level_sub.add_parser("export", help="Export block-level benchmark scaffold")
+    block_level_export_parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_BLOCK_LEVEL_INPUT,
+        help="Benchmark image root (JSON page export directory for now)",
+    )
+    block_level_export_parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_BLOCK_LEVEL_OUTPUT_ROOT,
+        help="Block-level output root",
+    )
+    block_level_export_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker threads for JSON loading",
+    )
+    block_level_export_parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable Rich progress bars",
+    )
+    block_level_export_parser.add_argument(
+        "--skip-dimensions",
+        action="store_true",
+        help="Skip reading image width/height (no Pillow required)",
+    )
+    block_level_export_parser.add_argument(
+        "--skip-flow-figures",
+        action="store_true",
+        help="Skip flow structure review overlay PNG generation",
+    )
+
+    block_level_flow_parser = block_level_sub.add_parser(
+        "flow-structure",
+        help="Compute Answer-Block Flow Structure metrics only",
+    )
+    block_level_flow_parser.add_argument("--input", type=Path, default=DEFAULT_BLOCK_LEVEL_INPUT)
+    block_level_flow_parser.add_argument("--output", type=Path, default=DEFAULT_BLOCK_LEVEL_OUTPUT_ROOT)
+    block_level_flow_parser.add_argument("--workers", type=int, default=None)
+    block_level_flow_parser.add_argument("--no-progress", action="store_true")
+    block_level_flow_parser.add_argument("--skip-flow-figures", action="store_true")
+
+    vision_parser = subparsers.add_parser("vision", help="[deprecated] Use block-level instead")
     vision_sub = vision_parser.add_subparsers(dest="vision_command", required=True)
     vision_export_parser = vision_sub.add_parser("export", help="Export vision benchmark scaffold")
     vision_export_parser.add_argument(
@@ -357,49 +634,6 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip flow structure review overlay PNG generation",
     )
-    vision_export_parser.add_argument(
-        "--skip-foreground-load-figures",
-        action="store_true",
-        help="Skip foreground load review overlay PNG generation",
-    )
-    vision_export_parser.add_argument(
-        "--skip-deleted-block-scale-figures",
-        action="store_true",
-        help="Skip deleted-block scale review overlay PNG generation",
-    )
-
-    vision_fg_parser = vision_sub.add_parser(
-        "foreground-load",
-        help="Compute effective-region foreground load metrics only",
-    )
-    vision_fg_parser.add_argument(
-        "--input",
-        type=Path,
-        default=DEFAULT_VISION_INPUT,
-        help="Benchmark JSON page export directory",
-    )
-    vision_fg_parser.add_argument(
-        "--output",
-        type=Path,
-        default=DEFAULT_VISION_OUTPUT_ROOT,
-        help="Output root for foreground load tables",
-    )
-    vision_fg_parser.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="Number of worker threads for JSON loading",
-    )
-    vision_fg_parser.add_argument(
-        "--no-progress",
-        action="store_true",
-        help="Disable Rich progress bars",
-    )
-    vision_fg_parser.add_argument(
-        "--skip-figures",
-        action="store_true",
-        help="Skip foreground load review overlay PNG generation",
-    )
 
     vision_flow_parser = vision_sub.add_parser(
         "flow-structure",
@@ -435,113 +669,232 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip flow structure review overlay PNG generation",
     )
 
-    vision_dbs_parser = vision_sub.add_parser(
-        "deleted-block-scale",
-        help="Compute Deleted-Block Scale metrics only",
-    )
-    vision_dbs_parser.add_argument(
-        "--input",
-        type=Path,
-        default=DEFAULT_VISION_INPUT,
-        help="Benchmark JSON page export directory",
-    )
-    vision_dbs_parser.add_argument(
-        "--output",
-        type=Path,
-        default=DEFAULT_VISION_OUTPUT_ROOT,
-        help="Output root for deleted-block scale tables",
-    )
-    vision_dbs_parser.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="Number of worker threads for JSON loading",
-    )
-    vision_dbs_parser.add_argument(
-        "--no-progress",
-        action="store_true",
-        help="Disable Rich progress bars",
-    )
-    vision_dbs_parser.add_argument(
-        "--skip-figures",
-        action="store_true",
-        help="Skip deleted-block scale review overlay PNG generation",
-    )
-
-    unified_export_parser = subparsers.add_parser(
+    page_level_parser = subparsers.add_parser("page-level", help="Pure image-level page analysis")
+    page_level_sub = page_level_parser.add_subparsers(dest="page_level_command", required=True)
+    page_level_export_parser = page_level_sub.add_parser(
         "export",
-        help="Run full HMER + Vision export and dataset overview in one command",
+        help="Export page-level image analysis (inventory, calibration, features, heatmaps, report)",
     )
-    unified_export_parser.add_argument(
+    page_level_export_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config/image_analysis.yaml"),
+        help="YAML configuration file",
+    )
+    page_level_export_parser.add_argument(
         "--input",
         type=Path,
         default=DEFAULT_BENCHMARK_INPUT,
-        help="Benchmark JSON input directory (shared by HMER and Vision)",
+        help="Benchmark JSON/image root directory",
     )
-    unified_export_parser.add_argument(
+    page_level_export_parser.add_argument(
         "--output",
         type=Path,
-        default=DEFAULT_UNIFIED_OUTPUT_ROOT,
-        help="Output root (writes HMER/, vision/, dataset_overview.md)",
+        default=DEFAULT_PAGE_LEVEL_OUTPUT,
+        help="Page-level output root directory",
     )
-    unified_export_parser.add_argument(
-        "--hmer-output",
-        type=Path,
-        default=None,
-        help="HMER output directory (default: {output}/HMER)",
-    )
-    unified_export_parser.add_argument(
-        "--vision-output",
-        type=Path,
-        default=None,
-        help="Vision output directory (default: {output}/vision)",
-    )
-    unified_export_parser.add_argument(
+    page_level_export_parser.add_argument(
         "--workers",
         type=int,
         default=None,
         help="Number of worker threads",
     )
-    unified_export_parser.add_argument(
+    page_level_export_parser.add_argument(
         "--no-progress",
         action="store_true",
         help="Disable Rich progress bars",
     )
-    unified_export_parser.add_argument(
-        "--skip-dimensions",
-        action="store_true",
-        help="Skip reading image width/height from files for Vision metrics",
-    )
-    unified_export_parser.add_argument(
+    page_level_export_parser.add_argument(
         "--skip-figures",
         action="store_true",
-        help="Skip all figure generation (HMER matplotlib + Vision overlays)",
+        help="Skip QA and paper figure generation",
     )
-    unified_export_parser.add_argument(
-        "--skip-cross-benchmark",
-        action="store_true",
-        help="Skip cross-benchmark comparison tables",
+
+    page_latex_parser = subparsers.add_parser(
+        "page-level-latex",
+        help="Page-level LaTeX / expression statistics (Chapter 6, HMER protocol)",
     )
-    unified_export_parser.add_argument(
-        "--datasets",
+    page_latex_sub = page_latex_parser.add_subparsers(dest="page_level_latex_command", required=True)
+    page_latex_export_parser = page_latex_sub.add_parser(
+        "export",
+        help="Export expression_ and page-level LaTeX metrics, tables, and figures",
+    )
+    page_latex_export_parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path("/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark"),
+        help="Benchmark JSON root (same source as HMER Chapter 5)",
+    )
+    page_latex_export_parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_PAGE_LEVEL_LATEX_OUTPUT,
+        help="Output directory (default: ./page_level_latex)",
+    )
+    page_latex_export_parser.add_argument(
+        "--workers",
+        type=int,
         default=None,
-        help="Comma-separated cross-benchmark datasets (default: all configured)",
+        help="Number of worker threads",
     )
-    unified_export_parser.add_argument(
-        "--skip-flow-figures",
+    page_latex_export_parser.add_argument(
+        "--no-progress",
         action="store_true",
-        help="Skip flow structure review overlay PNGs only",
+        help="Disable Rich progress bars",
     )
-    unified_export_parser.add_argument(
-        "--skip-foreground-load-figures",
+    page_latex_export_parser.add_argument(
+        "--skip-figures",
         action="store_true",
-        help="Skip foreground load review overlay PNGs only",
+        help="Skip figure generation",
     )
-    unified_export_parser.add_argument(
-        "--skip-deleted-block-scale-figures",
+    page_latex_export_parser.add_argument(
+        "--allow-consistency-failure",
         action="store_true",
-        help="Skip deleted-block scale review overlay PNGs only",
+        help="Write outputs even when Chapter-5 consistency checks fail",
     )
+
+    page_latex_prepare_parser = page_latex_sub.add_parser(
+        "prepare-split-inputs",
+        help="Export dataset_manifest / page_hmer_features / page_token_counts for stratified split",
+    )
+    page_latex_prepare_parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path("/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark"),
+        help="Benchmark JSON root",
+    )
+    page_latex_prepare_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("./page_level_latex_split/inputs"),
+        help="Directory for frozen split input CSVs",
+    )
+    page_latex_prepare_parser.add_argument("--dataset-version", default="", help="Dataset version label")
+    page_latex_prepare_parser.add_argument("--workers", type=int, default=None)
+    page_latex_prepare_parser.add_argument("--no-progress", action="store_true")
+
+    page_latex_split_parser = page_latex_sub.add_parser(
+        "split",
+        help="Multilabel stratified train/val/test split from frozen Chapter-6 inputs",
+    )
+    page_latex_split_parser.add_argument(
+        "--inputs",
+        type=Path,
+        default=Path("./page_level_latex_split/inputs"),
+        help="Directory containing dataset_manifest / page_hmer_features / page_token_counts",
+    )
+    page_latex_split_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config/page_level_latex_split.yaml"),
+        help="Frozen split configuration YAML",
+    )
+    page_latex_split_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("./page_level_latex_split"),
+        help="Split output root",
+    )
+    page_latex_split_parser.add_argument("--skip-figures", action="store_true")
+    page_latex_split_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Parallel candidate-seed workers (default min(3, cpu_count))",
+    )
+    page_latex_split_parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable Rich progress bars",
+    )
+
+    line_level_parser = subparsers.add_parser("line-level", help="Line-level feature analysis")
+    line_level_sub = line_level_parser.add_subparsers(dest="line_level_command", required=True)
+    line_level_export_parser = line_level_sub.add_parser(
+        "export",
+        help="Export line-level geometry statistics (size, orientation, position, nearest distance, IoU)",
+    )
+    line_level_export_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config/line_analysis.yaml"),
+        help="YAML configuration file",
+    )
+    line_level_export_parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_BENCHMARK_INPUT,
+        help="Benchmark JSON/image root directory",
+    )
+    line_level_export_parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_LINE_LEVEL_OUTPUT,
+        help="Line-level output root directory",
+    )
+    line_level_export_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker threads",
+    )
+    line_level_export_parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable Rich progress bars",
+    )
+    line_level_export_parser.add_argument(
+        "--skip-figures",
+        action="store_true",
+        help="Skip plots and sample overlay generation",
+    )
+    line_level_errors_parser = line_level_sub.add_parser(
+        "export-errors",
+        help="Export visualizations for line polygon validation failures",
+    )
+    line_level_errors_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config/line_analysis.yaml"),
+        help="YAML configuration file",
+    )
+    line_level_errors_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("line_error"),
+        help="Output directory for validation error figures",
+    )
+    line_level_errors_parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker threads",
+    )
+    line_level_errors_parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable Rich progress bars",
+    )
+
+    project_parser = subparsers.add_parser("project", help="Unified benchmark project export")
+    project_sub = project_parser.add_subparsers(dest="project_command", required=True)
+    project_export_parser = project_sub.add_parser(
+        "export",
+        help="Run full HMER + page_level + line_level (+ optional split) export",
+    )
+    project_export_parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Optional YAML config (config/project.yaml)",
+    )
+    _add_unified_export_args(project_export_parser)
+
+    unified_export_parser = subparsers.add_parser(
+        "export",
+        help="[deprecated] Use `project export` instead",
+    )
+    _add_unified_export_args(unified_export_parser)
 
     return parser
 
@@ -556,40 +909,59 @@ def main(argv: list[str] | None = None) -> int:
             parser.parse_args(["hmer", "export", "--help"])
         return main(["ocr", *forwarded])
 
+    if args.command == "project" and args.project_command == "export":
+        if args.config is not None:
+            project_config = load_project_config(args.config)
+            args.input = project_config.input_root
+            args.output = project_config.output_root
+            if project_config.workers is not None:
+                args.workers = project_config.workers
+            page_cfg = project_config.pipelines.page_level.get("config")
+            if page_cfg and args.page_level_config is None:
+                args.page_level_config = Path(page_cfg)
+            line_cfg = project_config.pipelines.line_level.get("config")
+            if line_cfg and args.line_level_config is None:
+                args.line_level_config = Path(line_cfg)
+            if project_config.pipelines.hmer.get("skip_cross_benchmark"):
+                args.skip_cross_benchmark = True
+            if project_config.pipelines.block_level.get("skip_figures"):
+                args.skip_figures = True
+            if project_config.pipelines.page_level_hmer.get("skip_figures"):
+                args.skip_page_level_hmer_figures = True
+            split_cfg = project_config.pipelines.page_level_latex_split
+            if split_cfg.get("enabled"):
+                args.run_page_level_latex_split = True
+            split_config_path = split_cfg.get("config")
+            if split_config_path and args.page_level_latex_split_config == DEFAULT_PAGE_LEVEL_LATEX_SPLIT_CONFIG:
+                args.page_level_latex_split_config = Path(split_config_path)
+        return _run_project_like_export(args)
+
     if args.command == "export":
-        processing = ProcessingOptions(
-            show_progress=not args.no_progress,
-            workers=args.workers,
-        )
-        vision_processing = VisionProcessingOptions(
+        _warn_vision_deprecated("export")
+        return _run_project_like_export(args)
+
+    block_level_command = None
+    if args.command == "block-level":
+        block_level_command = args.block_level_command
+    elif args.command == "vision":
+        _warn_vision_deprecated("vision")
+        block_level_command = args.vision_command
+
+    if block_level_command == "export":
+        block_level_processing = BlockLevelProcessingOptions(
             show_progress=not args.no_progress,
             workers=args.workers,
             read_image_dimensions=not args.skip_dimensions,
         )
-        cross_datasets = None
-        if args.datasets:
-            cross_datasets = [name.strip() for name in args.datasets.split(",") if name.strip()]
-        skip_all_figures = args.skip_figures
-        result = run_unified_benchmark_export(
+        manifest = run_block_level_export(
             args.input,
             args.output,
-            hmer_output=args.hmer_output,
-            vision_output=args.vision_output,
-            processing=processing,
-            vision_processing=vision_processing,
-            skip_hmer_figures=skip_all_figures,
-            skip_cross_benchmark=args.skip_cross_benchmark,
-            cross_benchmark_datasets=cross_datasets,
-            skip_flow_figures=skip_all_figures or args.skip_flow_figures,
-            skip_foreground_load_figures=skip_all_figures or args.skip_foreground_load_figures,
-            skip_deleted_block_scale_figures=skip_all_figures or args.skip_deleted_block_scale_figures,
+            processing=block_level_processing,
+            skip_flow_figures=args.skip_flow_figures,
         )
-        print(f"wrote unified export under {result.output_root.resolve()}")
-        print(f"HMER: {result.hmer_output.resolve()}")
-        print(f"Vision: {result.vision_output.resolve()}")
-        print(f"dataset overview: {result.dataset_overview.resolve()}")
-        print(f"HMER detail: {(result.hmer_output / 'summary.md').resolve()}")
-        print(f"Vision detail: {(result.vision_output / 'vision_benchmark_summary.md').resolve()}")
+        print(f"wrote {len(manifest)} block-level artifacts under {args.output.resolve()}")
+        for key, rel_path in manifest.items():
+            print(f"{key}: {rel_path}")
         return 0
 
     if args.command == "overview" and args.overview_command == "export":
@@ -597,7 +969,7 @@ def main(argv: list[str] | None = None) -> int:
             show_progress=not args.no_progress,
             workers=args.workers,
         )
-        vision_processing = VisionProcessingOptions(
+        block_level_processing = BlockLevelProcessingOptions(
             show_progress=not args.no_progress,
             workers=args.workers,
             read_image_dimensions=not args.skip_dimensions,
@@ -606,11 +978,62 @@ def main(argv: list[str] | None = None) -> int:
             args.input,
             args.output,
             processing=processing,
-            vision_processing=vision_processing,
+            vision_processing=block_level_processing,
         )
         print(f"wrote {overview_path.resolve()}")
         print(f"HMER overview: {(args.output / 'HMER' / 'overview.md').resolve()}")
-        print(f"Vision overview: {(args.output / 'vision' / 'overview.md').resolve()}")
+        print(f"Block-level overview: {(args.output / 'block_level' / 'overview.md').resolve()}")
+        return 0
+
+    if block_level_command == "flow-structure":
+        from benchmark_design.report.block_level.flow_structure_export import (
+            write_flow_group_summary_csv,
+            write_flow_structure_decisions_jsonl,
+        )
+        from benchmark_design.report.block_level.flow_structure_figures import export_flow_structure_figures
+        from benchmark_design.report.block_level.flow_structure_summary import write_flow_structure_summary_md
+
+        block_level_processing = BlockLevelProcessingOptions(
+            show_progress=not args.no_progress,
+            workers=args.workers,
+            read_image_dimensions=False,
+        )
+        results = compute_flow_structure_results(
+            args.input,
+            processing=block_level_processing,
+            input_dir_for_images=args.input,
+        )
+        args.output.mkdir(parents=True, exist_ok=True)
+        tables_dir = args.output / "tables"
+        details_dir = args.output / "details"
+        tables_dir.mkdir(parents=True, exist_ok=True)
+        details_dir.mkdir(parents=True, exist_ok=True)
+        page_path = tables_dir / "flow_structure_page_metrics.csv"
+        group_summary_path = tables_dir / "flow_group_summary.csv"
+        block_path = tables_dir / "flow_structure_block_geometry.csv"
+        decisions_path = details_dir / "flow_structure_decisions.jsonl"
+        summary_path = args.output / "flow_structure_summary.md"
+        write_flow_structure_page_metrics_csv(results, page_path)
+        write_flow_group_summary_csv(results, group_summary_path)
+        write_flow_structure_block_geometry_csv(
+            [record for result in results for record in result.block_records],
+            block_path,
+        )
+        write_flow_structure_decisions_jsonl(results, decisions_path)
+        write_flow_structure_summary_md(results, summary_path)
+        if not args.skip_flow_figures:
+            export_flow_structure_figures(
+                results,
+                input_dir=args.input,
+                figures_root=args.output / "figures" / "flow_structure",
+                show_progress=not args.no_progress,
+            )
+        print(f"pages: {len(results):,}")
+        print(f"wrote {page_path}")
+        print(f"wrote {group_summary_path}")
+        print(f"wrote {block_path}")
+        print(f"wrote {decisions_path}")
+        print(f"wrote {summary_path}")
         return 0
 
     processing = _processing_options(args) if args.command == "ocr" else ProcessingOptions()
@@ -765,229 +1188,105 @@ def main(argv: list[str] | None = None) -> int:
             print(f"wrote {path}")
         return 0
 
-    if args.command == "vision" and args.vision_command == "export":
-        vision_processing = VisionProcessingOptions(
-            show_progress=not args.no_progress,
-            workers=args.workers,
-            read_image_dimensions=not args.skip_dimensions,
-        )
-        manifest = run_vision_benchmark_export(
+    if args.command == "page-level" and args.page_level_command == "export":
+        manifest = run_page_level_export(
             args.input,
             args.output,
-            processing=vision_processing,
-            skip_flow_figures=args.skip_flow_figures,
-            skip_foreground_load_figures=args.skip_foreground_load_figures,
-            skip_deleted_block_scale_figures=args.skip_deleted_block_scale_figures,
+            config_path=args.config,
+            workers=args.workers,
+            show_progress=not args.no_progress,
+            skip_figures=args.skip_figures,
         )
-        print(f"wrote {len(manifest)} vision artifacts under {args.output.resolve()}")
-        for key, rel_path in manifest.items():
-            print(f"{key}: {rel_path}")
+        print(f"wrote {len(manifest)} page-level artifacts under {args.output.resolve()}")
+        print(f"report: {(args.output / manifest['report']).resolve()}")
+        print(f"features: {(args.output / manifest['image_features']).resolve()}")
         return 0
 
-    if args.command == "vision" and args.vision_command == "flow-structure":
-        from benchmark_design.report.vision.flow_structure_export import (
-            write_flow_group_summary_csv,
-            write_flow_structure_decisions_jsonl,
-        )
-        from benchmark_design.report.vision.flow_structure_figures import export_flow_structure_figures
-        from benchmark_design.report.vision.flow_structure_summary import write_flow_structure_summary_md
-
-        vision_processing = VisionProcessingOptions(
-            show_progress=not args.no_progress,
-            workers=args.workers,
-            read_image_dimensions=False,
-        )
-        results = compute_flow_structure_results(
+    if args.command == "page-level-latex" and args.page_level_latex_command == "export":
+        result = run_page_level_latex_export(
             args.input,
-            processing=vision_processing,
-            input_dir_for_images=args.input,
+            args.output,
+            workers=args.workers,
+            show_progress=not args.no_progress,
+            skip_figures=args.skip_figures,
+            strict_consistency=not args.allow_consistency_failure,
         )
-        args.output.mkdir(parents=True, exist_ok=True)
-        tables_dir = args.output / "tables"
-        details_dir = args.output / "details"
-        tables_dir.mkdir(parents=True, exist_ok=True)
-        details_dir.mkdir(parents=True, exist_ok=True)
-        page_path = tables_dir / "flow_structure_page_metrics.csv"
-        group_summary_path = tables_dir / "flow_group_summary.csv"
-        block_path = tables_dir / "flow_structure_block_geometry.csv"
-        decisions_path = details_dir / "flow_structure_decisions.jsonl"
-        summary_path = args.output / "flow_structure_summary.md"
-        write_flow_structure_page_metrics_csv(results, page_path)
-        write_flow_group_summary_csv(results, group_summary_path)
-        write_flow_structure_block_geometry_csv(
-            [record for result in results for record in result.block_records],
-            block_path,
+        print(f"wrote page-level LaTeX artifacts under {args.output.resolve()}")
+        print(f"consistency_passed={result.passed_consistency}")
+        print(f"expression metrics: {(args.output / result.manifest['expression_latex_metrics']).resolve()}")
+        print(f"page metrics: {(args.output / result.manifest['page_latex_metrics']).resolve()}")
+        print(f"summary: {(args.output / result.manifest['dataset_summary']).resolve()}")
+        return 0
+
+    if args.command == "page-level-latex" and args.page_level_latex_command == "prepare-split-inputs":
+        from benchmark_design.page_level_latex.split_inputs import prepare_split_inputs
+
+        result = prepare_split_inputs(
+            args.input,
+            args.output,
+            dataset_version=args.dataset_version,
+            workers=args.workers,
+            show_progress=not args.no_progress,
         )
-        write_flow_structure_decisions_jsonl(results, decisions_path)
-        write_flow_structure_summary_md(results, summary_path)
-        if not args.skip_flow_figures:
-            export_flow_structure_figures(
-                results,
-                input_dir=args.input,
-                figures_root=args.output / "figures" / "flow_structure",
+        print(f"wrote {result.page_count} page split inputs under {result.output_dir.resolve()}")
+        for key, rel in result.manifest.items():
+            print(f"{key}: {(result.output_dir / rel).resolve()}")
+        return 0
+
+    if args.command == "page-level-latex" and args.page_level_latex_command == "split":
+        from benchmark_design.page_level_latex_split import run_page_level_latex_split
+        from benchmark_design.page_level_latex_split.audit import SplitAcceptanceError
+
+        try:
+            result = run_page_level_latex_split(
+                args.inputs,
+                args.output,
+                config_path=args.config,
+                skip_figures=args.skip_figures,
                 show_progress=not args.no_progress,
+                workers=args.workers,
             )
-        print(f"pages: {len(results):,}")
-        print(f"wrote {page_path}")
-        print(f"wrote {group_summary_path}")
-        print(f"wrote {block_path}")
-        print(f"wrote {decisions_path}")
-        print(f"wrote {summary_path}")
+        except SplitAcceptanceError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"wrote stratified split under {result.output_root.resolve()}")
+        print(f"selected_seed={result.selected_seed}")
+        print(f"manifest_sha256={result.manifest_sha256}")
+        print(f"acceptance_passed={result.acceptance.passed}")
+        for key, rel in result.artifact_manifest.items():
+            print(f"{key}: {rel}")
         return 0
 
-    if args.command == "vision" and args.vision_command == "foreground-load":
-        from benchmark_design.report.vision.foreground_pixel_density_comparison_figures import (
-            export_foreground_pixel_density_comparison_figures,
-        )
-        from benchmark_design.report.vision.foreground_pixel_density_export import (
-            write_foreground_pixel_density_block_metrics_csv,
-            write_foreground_pixel_density_diagnostics_json,
-            write_foreground_pixel_density_overall_csv,
-            write_foreground_pixel_density_page_metrics_csv,
-            write_foreground_pixel_density_region_metrics_csv,
-        )
-        from benchmark_design.report.vision.foreground_pixel_density_figures import (
-            export_foreground_pixel_density_figures,
-        )
-        from benchmark_design.report.vision.foreground_pixel_density_summary import (
-            write_foreground_pixel_density_summary_md,
-        )
-        from benchmark_design.vision.flow_structure.page_loader import load_page_annotations
-        from benchmark_design.vision.foreground_load.pipeline import compute_foreground_load_results
-
-        vision_processing = VisionProcessingOptions(
-            show_progress=not args.no_progress,
-            workers=args.workers,
-            read_image_dimensions=False,
-        )
-        results, thresholds, global_config = compute_foreground_load_results(
+    if args.command == "line-level" and args.line_level_command == "export":
+        manifest = run_line_level_export(
             args.input,
-            processing=vision_processing,
-            input_dir_for_images=args.input,
+            args.output,
+            config_path=args.config,
+            workers=args.workers,
+            show_progress=not args.no_progress,
+            skip_figures=args.skip_figures,
         )
-        args.output.mkdir(parents=True, exist_ok=True)
-        tables_dir = args.output / "tables"
-        metadata_dir = args.output / "metadata"
-        figures_dir = args.output / "figures"
-        tables_dir.mkdir(parents=True, exist_ok=True)
-        metadata_dir.mkdir(parents=True, exist_ok=True)
-        figures_dir.mkdir(parents=True, exist_ok=True)
-        page_path = tables_dir / "foreground_pixel_density_page_metrics.csv"
-        block_path = tables_dir / "foreground_pixel_density_block_metrics.csv"
-        region_path = tables_dir / "foreground_pixel_density_region_metrics.csv"
-        overall_path = tables_dir / "foreground_pixel_density_overall.csv"
-        diagnostics_path = metadata_dir / "foreground_pixel_density_diagnostics.json"
-        summary_path = args.output / "foreground_pixel_density_summary.md"
-        page_stats, block_stats = write_foreground_pixel_density_overall_csv(results, overall_path)
-        write_foreground_pixel_density_page_metrics_csv(results, page_path)
-        write_foreground_pixel_density_block_metrics_csv(
-            [block for result in results for block in result.block_results],
-            block_path,
-        )
-        write_foreground_pixel_density_region_metrics_csv(results, region_path)
-        write_foreground_pixel_density_diagnostics_json(
-            results,
-            thresholds,
-            diagnostics_path,
-            global_config=global_config,
-        )
-        write_foreground_pixel_density_summary_md(
-            results,
-            summary_path,
-            page_stats=page_stats,
-            block_stats=block_stats,
-            flow_stats=[],
-            thresholds=thresholds,
-            diagnostics_json_path="metadata/foreground_pixel_density_diagnostics.json",
-        )
-        if not args.skip_figures:
-            pages = load_page_annotations(args.input, processing=vision_processing)
-            export_foreground_pixel_density_figures(
-                results,
-                pages,
-                [],
-                input_dir=args.input,
-                figures_root=figures_dir,
-            )
-            export_foreground_pixel_density_comparison_figures(
-                results,
-                pages,
-                input_dir=args.input,
-                figures_root=figures_dir,
-                global_config=global_config,
-            )
-        print(f"pages: {len(results):,}")
-        print(f"wrote {page_path}")
-        print(f"wrote {block_path}")
-        print(f"wrote {region_path}")
-        print(f"wrote {overall_path}")
-        print(f"wrote {diagnostics_path}")
-        print(f"wrote {summary_path}")
+        print(f"wrote {len(manifest)} line-level artifacts under {args.output.resolve()}")
+        print(f"report: {(args.output / manifest['report']).resolve()}")
+        print(f"line metrics: {(args.output / manifest['line_metrics']).resolve()}")
         return 0
 
-    if args.command == "vision" and args.vision_command == "deleted-block-scale":
-        from benchmark_design.report.vision.deleted_block_scale_export import (
-            write_deleted_block_scale_block_geometry_csv,
-            write_deleted_block_scale_diagnostics_json,
-            write_deleted_block_scale_page_metrics_csv,
-        )
-        from benchmark_design.report.vision.deleted_block_scale_figures import (
-            export_deleted_block_scale_figures,
-        )
-        from benchmark_design.report.vision.deleted_block_scale_stats import (
-            compute_deleted_block_scale_summary_stats,
-        )
-        from benchmark_design.report.vision.deleted_block_scale_summary import (
-            write_deleted_block_scale_summary_md,
-        )
-        from benchmark_design.vision.dataset import load_vision_benchmark_dataset
-        from benchmark_design.vision.deleted_block_scale.pipeline import (
-            compute_deleted_block_scale_results,
-        )
-
-        vision_processing = VisionProcessingOptions(
-            show_progress=not args.no_progress,
+    if args.command == "line-level" and args.line_level_command == "export-errors":
+        config = load_line_level_config(
+            args.config,
+            output_root=args.output,
             workers=args.workers,
-            read_image_dimensions=False,
+            show_progress=not args.no_progress,
         )
-        dataset = load_vision_benchmark_dataset(args.input, processing=vision_processing)
-        pages = list(dataset.pages)
-        results = compute_deleted_block_scale_results(
-            args.input,
-            processing=vision_processing,
-            input_dir_for_images=args.input,
-            pages=pages,
-        )
-        args.output.mkdir(parents=True, exist_ok=True)
-        tables_dir = args.output / "tables"
-        metadata_dir = args.output / "metadata"
-        tables_dir.mkdir(parents=True, exist_ok=True)
-        metadata_dir.mkdir(parents=True, exist_ok=True)
-        page_path = tables_dir / "deleted_block_scale_page_metrics.csv"
-        block_path = tables_dir / "deleted_block_scale_block_geometry.csv"
-        diagnostics_path = metadata_dir / "deleted_block_scale_diagnostics.json"
-        summary_path = args.output / "deleted_block_scale_summary.md"
-        dbs_stats = compute_deleted_block_scale_summary_stats(results)
-        write_deleted_block_scale_page_metrics_csv(results, page_path)
-        write_deleted_block_scale_block_geometry_csv(
-            [record for result in results for record in result.block_records],
-            block_path,
-        )
-        write_deleted_block_scale_diagnostics_json(dbs_stats, diagnostics_path)
-        write_deleted_block_scale_summary_md(results, summary_path, stats=dbs_stats)
-        if not args.skip_figures:
-            export_deleted_block_scale_figures(
-                results,
-                pages,
-                input_dir=args.input,
-                figures_root=args.output / "figures" / "deleted_block_scale",
-                show_progress=not args.no_progress,
-            )
-        print(f"pages: {len(results):,}")
-        print(f"wrote {page_path}")
-        print(f"wrote {block_path}")
-        print(f"wrote {diagnostics_path}")
-        print(f"wrote {summary_path}")
+        summary = export_line_validation_error_figures(config, args.output)
+        print(f"wrote {summary['total_error_count']} line validation error figures under {args.output.resolve()}")
+        for reason, count in summary["counts_by_reason"].items():
+            if count:
+                label = summary["reason_labels"][reason]
+                print(f"  {reason}: {count} ({label})")
+        print(f"summary: {(args.output / 'summary.json').resolve()}")
+        if (args.output / "error_index.csv").is_file():
+            print(f"index: {(args.output / 'error_index.csv').resolve()}")
         return 0
 
     parser.error(f"Unhandled command: {args}")

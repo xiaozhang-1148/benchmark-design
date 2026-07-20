@@ -1,188 +1,169 @@
-"""Figure: line-level examples of potentially confusable tokens."""
+"""Visual review figures for confusable-token example expressions."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import textwrap
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 
 from benchmark_design.io.benchmark_loader import ExpressionRecord
 from benchmark_design.ocr.confusable_tokens import (
-    PRIMARY_CONFUSABLE_GROUPS,
-    ConfusableGroupSpec,
-    group_tokens_present,
-    subgroup_co_occurrence_count,
+    CONFUSABLE_EXAMPLE_COUNT_PER_TOKEN,
+    CONFUSABLE_EXAMPLE_MIN_OCR_CHARS,
+    select_confusable_token_examples,
 )
 from benchmark_design.ocr.expression_features import ExpressionFeatures
 from benchmark_design.ocr.line_crop import crop_line_polygon, resolve_page_image_path
+from benchmark_design.report.confusable_token_examples import GREEK_VARIANT_EXAMPLE_TOKENS
+from benchmark_design.report.export_figures import _configure_matplotlib_fonts
 from benchmark_design.report.pyplot_lock import with_locked_pyplot
 
-EXAMPLES_PER_GROUP = 1
+GREEK_VARIANT_GROUP_NAME = "greek-variant"
+FIGURE_DPI = 120
+TEXT_WRAP_WIDTH = 96
 
 
-@dataclass(frozen=True, slots=True)
-class ConfusableLineExample:
-    group: ConfusableGroupSpec
-    feature: ExpressionFeatures
-    record: ExpressionRecord
-    highlight_tokens: tuple[str, ...]
-
-    @property
-    def token_type_label(self) -> str:
-        present = set(self.highlight_tokens)
-        best_subgroup: tuple[str, ...] | None = None
-        best_score = -1
-        for subgroup in self.group.subgroups:
-            overlap = subgroup_co_occurrence_count(self.feature.token_sequence, subgroup)
-            if overlap > best_score:
-                best_score = overlap
-                best_subgroup = subgroup.tokens
-        if best_subgroup is not None and best_score > 0:
-            shown = [token for token in best_subgroup if token in present]
-            if shown:
-                return " / ".join(shown)
-        return " / ".join(self.highlight_tokens)
+def build_expression_record_index(
+    records: Sequence[ExpressionRecord],
+) -> dict[str, ExpressionRecord]:
+    return {record.expression_id: record for record in records}
 
 
-def _require_matplotlib():
-    import matplotlib.pyplot as plt
-
-    from benchmark_design.report.export_figures import _configure_matplotlib_fonts
-
-    _configure_matplotlib_fonts(plt)
-    return plt
+def _token_directory_name(token: str) -> str:
+    cleaned = token.strip().strip("\\")
+    return cleaned or "token"
 
 
-def _feature_index(
-    features: list[ExpressionFeatures],
-    expressions: list[ExpressionRecord],
-) -> dict[str, tuple[ExpressionFeatures, ExpressionRecord]]:
-    return {
-        feature.expression_id: (feature, record)
-        for feature, record in zip(features, expressions, strict=True)
-    }
+def _safe_filename(value: str) -> str:
+    return value.replace("/", "_").replace("\\", "_").replace(":", "_")
 
 
-def _example_score(
-    feature: ExpressionFeatures,
-    record: ExpressionRecord,
-    group: ConfusableGroupSpec,
-) -> tuple[int, int, int]:
-    present = group_tokens_present(feature.token_sequence, group)
-    has_polygon = 1 if len(record.line_polygon) >= 3 else 0
-    co_occur = len(set(present))
-    return (has_polygon, -feature.token_length, co_occur)
+def _wrap_latex(text: str, *, width: int = TEXT_WRAP_WIDTH) -> str:
+    wrapped_lines: list[str] = []
+    for paragraph in text.splitlines() or [text]:
+        paragraph = paragraph.strip()
+        if not paragraph:
+            wrapped_lines.append("")
+            continue
+        wrapped_lines.extend(textwrap.wrap(paragraph, width=width, break_long_words=False, break_on_hyphens=False))
+    return "\n".join(wrapped_lines)
 
 
-def select_confusable_line_examples(
-    features: list[ExpressionFeatures],
-    expressions: list[ExpressionRecord],
-    *,
-    examples_per_group: int = EXAMPLES_PER_GROUP,
-) -> list[ConfusableLineExample]:
-    by_id = _feature_index(features, expressions)
-    selected: list[ConfusableLineExample] = []
-
-    for group in PRIMARY_CONFUSABLE_GROUPS:
-        candidates: list[tuple[tuple[int, int, int], ConfusableLineExample]] = []
-        for feature in features:
-            present = group_tokens_present(feature.token_sequence, group)
-            if not present:
-                continue
-            record = by_id[feature.expression_id][1]
-            example = ConfusableLineExample(
-                group=group,
-                feature=feature,
-                record=record,
-                highlight_tokens=present,
-            )
-            candidates.append((_example_score(feature, record, group), example))
-
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        seen_latex: set[str] = set()
-        group_examples: list[ConfusableLineExample] = []
-        for _, example in candidates:
-            if example.feature.normalized_latex in seen_latex:
-                continue
-            seen_latex.add(example.feature.normalized_latex)
-            group_examples.append(example)
-            if len(group_examples) >= examples_per_group:
-                break
-        selected.extend(group_examples)
-
-    return selected
-
-
-def _load_example_image(example: ConfusableLineExample, input_dir: Path) -> np.ndarray | None:
-    if len(example.record.line_polygon) < 3:
+def _load_crop_image(record: ExpressionRecord, *, input_dir: Path):
+    if len(record.line_polygon) < 3:
         return None
-    image_path = resolve_page_image_path(example.record.image_name, input_dir)
+    image_path = resolve_page_image_path(record.image_name, input_dir)
     if image_path is None:
         return None
     try:
-        cropped = crop_line_polygon(image_path, example.record.line_polygon)
-    except (OSError, ValueError):
+        return crop_line_polygon(image_path, record.line_polygon, margin_px=6)
+    except OSError:
         return None
-    return np.asarray(cropped)
 
 
 @with_locked_pyplot
-def write_confusable_token_examples_figure(
-    features: list[ExpressionFeatures],
-    expressions: list[ExpressionRecord],
-    input_dir: Path,
-    output_path: Path,
+def _draw_confusable_example_figure(
     *,
-    examples_per_group: int = EXAMPLES_PER_GROUP,
-) -> Path | None:
-    examples = select_confusable_line_examples(
-        features,
-        expressions,
-        examples_per_group=examples_per_group,
+    rank: int,
+    token: str,
+    group_name: str,
+    record: ExpressionRecord,
+    feature: ExpressionFeatures,
+    crop_image,
+    output_path: Path,
+) -> None:
+    import matplotlib.pyplot as plt
+
+    _configure_matplotlib_fonts(plt)
+    image_array = np.asarray(crop_image)
+    image_height, image_width = image_array.shape[:2]
+    text_block_inches = 2.8
+    image_inches = max(image_height / FIGURE_DPI, 1.6)
+    fig_height = image_inches + text_block_inches
+    fig_width = max(image_width / FIGURE_DPI, 6.0)
+
+    fig = plt.figure(figsize=(fig_width, fig_height), dpi=FIGURE_DPI)
+    grid = fig.add_gridspec(2, 1, height_ratios=[image_inches, text_block_inches], hspace=0.08)
+
+    image_axis = fig.add_subplot(grid[0, 0])
+    image_axis.imshow(image_array)
+    image_axis.axis("off")
+    image_axis.set_title(
+        f"{group_name} | token `{token}` | example {rank:02d}",
+        fontsize=11,
+        loc="left",
+        pad=8,
     )
-    renderable = [example for example in examples if _load_example_image(example, input_dir) is not None]
-    if not renderable:
-        return None
 
-    plt = _require_matplotlib()
-    row_count = len(renderable)
-    fig_height = max(3.0, row_count * 1.1)
-    fig, axes = plt.subplots(row_count, 2, figsize=(8.5, fig_height))
-    if row_count == 1:
-        axes = np.array([axes])
+    text_axis = fig.add_subplot(grid[1, 0])
+    text_axis.axis("off")
+    wrapped = _wrap_latex(feature.normalized_latex)
+    caption = (
+        f"expression_id: {feature.expression_id}\n"
+        f"ocr_char_count: {sum(1 for char in feature.normalized_latex if not char.isspace())}\n"
+        f"token_length: {feature.token_length}\n\n"
+        f"{wrapped}"
+    )
+    text_axis.text(
+        0.0,
+        1.0,
+        caption,
+        va="top",
+        ha="left",
+        fontsize=8,
+        wrap=True,
+    )
 
-    for row_index, example in enumerate(renderable):
-        label_ax, image_ax = axes[row_index]
-        label_ax.axis("off")
-        label_ax.text(
-            0.0,
-            0.62,
-            example.group.name,
-            transform=label_ax.transAxes,
-            fontsize=10,
-            fontweight="bold",
-            va="center",
-            ha="left",
-        )
-        label_ax.text(
-            0.0,
-            0.28,
-            example.token_type_label,
-            transform=label_ax.transAxes,
-            fontsize=11,
-            color="#333333",
-            va="center",
-            ha="left",
-        )
-
-        image = _load_example_image(example, input_dir)
-        image_ax.axis("off")
-        if image is not None:
-            image_ax.imshow(image)
-
-    fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    fig.savefig(output_path, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    return output_path
+
+
+def export_confusable_token_example_figures(
+    records: Sequence[ExpressionRecord],
+    features: Sequence[ExpressionFeatures],
+    *,
+    input_dir: Path,
+    figures_root: Path,
+    tokens: tuple[str, ...] = GREEK_VARIANT_EXAMPLE_TOKENS,
+    group_name: str = GREEK_VARIANT_GROUP_NAME,
+    min_ocr_chars: int = CONFUSABLE_EXAMPLE_MIN_OCR_CHARS,
+    per_token: int = CONFUSABLE_EXAMPLE_COUNT_PER_TOKEN,
+) -> dict[str, int]:
+    record_index = build_expression_record_index(records)
+    selected = select_confusable_token_examples(
+        features,
+        tokens=tokens,
+        min_ocr_chars=min_ocr_chars,
+        per_token=per_token,
+    )
+
+    counts: dict[str, int] = {f"{group_name}/{_token_directory_name(token)}": 0 for token in tokens}
+    token_rank: dict[str, int] = {token: 0 for token in tokens}
+
+    for token, feature in selected:
+        record = record_index.get(feature.expression_id)
+        if record is None:
+            continue
+        crop_image = _load_crop_image(record, input_dir=input_dir)
+        if crop_image is None:
+            continue
+
+        token_rank[token] += 1
+        rank = token_rank[token]
+        token_dir = figures_root / group_name / _token_directory_name(token)
+        output_path = token_dir / f"example_{rank:02d}_{_safe_filename(feature.expression_id)}.png"
+        _draw_confusable_example_figure(
+            rank=rank,
+            token=token,
+            group_name=group_name,
+            record=record,
+            feature=feature,
+            crop_image=crop_image,
+            output_path=output_path,
+        )
+        counts[f"{group_name}/{_token_directory_name(token)}"] += 1
+
+    return counts

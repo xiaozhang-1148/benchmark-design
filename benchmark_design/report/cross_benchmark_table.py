@@ -9,6 +9,7 @@ from benchmark_design.config import CROSS_BENCHMARK_PROVENANCE, CROSS_BENCHMARK_
 from benchmark_design.ocr.cross_benchmark import (
     CrossBenchmarkProfile,
     CrossBenchmarkRow,
+    STRUCTURAL_DIFFICULTY_TIERS,
     compute_cross_benchmark_results,
     length_bin_rows_for_profile,
 )
@@ -133,9 +134,21 @@ def write_cross_benchmark_profiles_csv(profiles: list[CrossBenchmarkProfile], ou
                 "structural_token_ratio",
                 "cjk_token_ratio",
                 "other_unknown_token_ratio",
+                "structural_difficulty_l1_count",
+                "structural_difficulty_l2_count",
+                "structural_difficulty_l3_count",
+                "structural_difficulty_l4_count",
+                "structural_difficulty_l1_ratio",
+                "structural_difficulty_l2_ratio",
+                "structural_difficulty_l3_ratio",
+                "structural_difficulty_l4_ratio",
             ]
         )
         for profile in profiles:
+            tier_ratios = [
+                count / profile.expression_count if profile.expression_count else 0.0
+                for count in profile.structural_difficulty_counts
+            ]
             writer.writerow(
                 [
                     profile.display_name,
@@ -194,6 +207,14 @@ def write_cross_benchmark_profiles_csv(profiles: list[CrossBenchmarkProfile], ou
                     f"{profile.structural_token_ratio:.6f}",
                     f"{profile.cjk_token_ratio:.6f}",
                     f"{profile.other_unknown_token_ratio:.6f}",
+                    profile.structural_difficulty_counts[0],
+                    profile.structural_difficulty_counts[1],
+                    profile.structural_difficulty_counts[2],
+                    profile.structural_difficulty_counts[3],
+                    f"{tier_ratios[0]:.6f}",
+                    f"{tier_ratios[1]:.6f}",
+                    f"{tier_ratios[2]:.6f}",
+                    f"{tier_ratios[3]:.6f}",
                 ]
             )
 
@@ -209,6 +230,24 @@ def write_cross_benchmark_length_bins_csv(
         for profile in profiles:
             for dataset, label, count, share in length_bin_rows_for_profile(profile):
                 writer.writerow([dataset, label, count, f"{share:.6f}"])
+
+
+def write_cross_benchmark_structural_difficulty_csv(
+    profiles: list[CrossBenchmarkProfile],
+    output_path: Path,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["dataset", "structural_difficulty", "count", "share"])
+        for profile in profiles:
+            for tier, count in zip(
+                STRUCTURAL_DIFFICULTY_TIERS,
+                profile.structural_difficulty_counts,
+                strict=True,
+            ):
+                share = count / profile.expression_count if profile.expression_count else 0.0
+                writer.writerow([profile.display_name, tier, count, f"{share:.6f}"])
 
 
 def write_cross_benchmark_tokenizer_coverage_csv(rows: list[CrossBenchmarkRow], output_path: Path) -> None:
@@ -278,6 +317,7 @@ def write_cross_benchmark_report(
         "profiles_csv": cross_dir / "cross_benchmark_profiles.csv",
         "summary_md": output_dir / "cross_benchmark_summary.md",
         "length_bins_csv": cross_dir / "cross_benchmark_length_bins.csv",
+        "structural_difficulty_csv": cross_dir / "cross_benchmark_structural_difficulty.csv",
         "tokenizer_coverage_csv": cross_dir / "cross_benchmark_tokenizer_coverage.csv",
         "provenance_csv": cross_dir / "cross_benchmark_provenance.csv",
     }
@@ -285,6 +325,7 @@ def write_cross_benchmark_report(
     write_cross_benchmark_profiles_csv(profiles, paths["profiles_csv"])
     write_cross_benchmark_comparison_markdown(profiles, paths["summary_md"])
     write_cross_benchmark_length_bins_csv(profiles, paths["length_bins_csv"])
+    write_cross_benchmark_structural_difficulty_csv(profiles, paths["structural_difficulty_csv"])
     write_cross_benchmark_tokenizer_coverage_csv(raw_rows, paths["tokenizer_coverage_csv"])
     write_cross_benchmark_provenance_csv(CROSS_BENCHMARK_PROVENANCE, paths["provenance_csv"], dataset_names=raw_names)
     return paths

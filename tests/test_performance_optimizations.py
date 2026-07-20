@@ -5,6 +5,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pytest
+
 from benchmark_design.ocr.cross_benchmark import compute_cross_benchmark_results
 from benchmark_design.ocr.processing import build_enriched_corpus_cached, clear_enriched_corpus_cache
 from benchmark_design.ocr.processing_options import ProcessingOptions
@@ -16,14 +18,36 @@ from benchmark_design.report.dataset_overview import (
     compute_dataset_overview,
     compute_hmer_overview,
 )
-from benchmark_design.vision.dataset import (
+from benchmark_design.block_level.dataset import (
     clear_vision_benchmark_dataset_cache,
     load_vision_benchmark_dataset,
     load_vision_benchmark_dataset_cached,
 )
-from benchmark_design.vision.processing_options import VisionProcessingOptions
+from benchmark_design.block_level.processing_options import VisionProcessingOptions
+from benchmark_design.progress import default_worker_count, partition_workers
 
 SAMPLE_PAGE = Path(__file__).parent / "fixtures" / "sample_page.json"
+
+
+def test_partition_workers_splits_budget_across_tasks() -> None:
+    assert partition_workers(128, 4) == 32
+    assert partition_workers(128, 1) == 128
+    assert partition_workers(None, 4) == default_worker_count()
+
+
+def test_parallel_map_chunk_preserves_order() -> None:
+    from benchmark_design.progress import parallel_map
+
+    items = list(range(20))
+    results = parallel_map(
+        lambda value: value * 2,
+        items,
+        description="chunk test",
+        show_progress=False,
+        workers=4,
+        chunk_size=5,
+    )
+    assert results == [value * 2 for value in items]
 
 
 def test_enriched_corpus_cache_reuses_build(tmp_path: Path) -> None:
@@ -144,3 +168,59 @@ def test_cross_benchmark_corpus_cache_populated(tmp_path: Path) -> None:
         assert cache["ours"] is processing_module._CORPUS_CACHE[("ours", str(input_dir.resolve()))]
     finally:
         CROSS_BENCHMARK_SETS["ours"] = original_path
+
+
+def test_line_level_loads_calibration_once(tmp_path: Path, monkeypatch) -> None:
+    from benchmark_design.line_level import pipeline as line_pipeline
+    from benchmark_design.line_level.bbox_ink import load_calibration_result
+    from benchmark_design.line_level.config import load_line_level_config
+    from benchmark_design.page_level.models import CalibrationResult
+
+    calibration = CalibrationResult(
+        dark_reference=10.0,
+        light_reference=240.0,
+        gray_threshold=154.0,
+        tau_d=154.0 / 255.0,
+        dark_percentile=1.0,
+        light_percentile=99.5,
+        threshold_method="test",
+        image_count=1,
+    )
+    calls: list[Path] = []
+
+    def _tracked_load(path: Path) -> CalibrationResult:
+        calls.append(path)
+        return calibration
+
+    monkeypatch.setattr(line_pipeline, "load_calibration_result", _tracked_load)
+    monkeypatch.setattr(
+        line_pipeline,
+        "discover_pages_from_benchmark",
+        lambda _config: [],
+    )
+
+    calibration_path = tmp_path / "calibration.json"
+    calibration_path.write_text(
+        '{"dark_reference":10,"light_reference":240,"global_threshold":154,"image_count":1}',
+        encoding="utf-8",
+    )
+    config = load_line_level_config(
+        input_root=tmp_path,
+        output_root=tmp_path / "out",
+        calibration_path=calibration_path,
+        show_progress=False,
+    )
+    with pytest.raises(ValueError, match="No benchmark pages"):
+        line_pipeline.run_line_level_analysis(config)
+    assert len(calls) == 1
+
+    injected = load_line_level_config(
+        input_root=tmp_path,
+        output_root=tmp_path / "out2",
+        calibration=calibration,
+        show_progress=False,
+    )
+    calls.clear()
+    with pytest.raises(ValueError, match="No benchmark pages"):
+        line_pipeline.run_line_level_analysis(injected)
+    assert calls == []

@@ -1,10 +1,11 @@
-"""Write consolidated OCR benchmark tables (1–9) to Markdown and CSV."""
+"""Write consolidated OCR benchmark tables (1–10) to Markdown and CSV."""
 
 from __future__ import annotations
 
 import csv
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,6 +37,7 @@ TABLE_TITLES: tuple[tuple[int, str, str], ...] = (
     (7, "Structure Combination Complexity", "结构组合复杂度"),
     (8, "Expression Content Type", "表达式内容类型"),
     (9, "Confusable Token Group Statistics", "易混 Token 组统计"),
+    (10, "Expression-level Structural Difficulty", "表达式结构难度"),
 )
 
 
@@ -202,7 +204,7 @@ def build_consolidated_csv_rows(metrics: OcrConsolidatedMetrics) -> list[Consoli
         )
 
     name = _table_name(9)
-    for group_metrics in metrics.confusable.all_groups():
+    for group_metrics in metrics.confusable.primary_groups:
         group_label = group_metrics.group.name
         rows.append(
             ConsolidatedCsvRow(
@@ -270,7 +272,44 @@ def write_consolidated_csv(rows: list[ConsolidatedCsvRow], output_path: Path) ->
             writer.writerow(row.as_list())
 
 
-def write_consolidated_markdown(metrics: OcrConsolidatedMetrics, output_path: Path) -> None:
+def _append_structural_difficulty_table(lines: list[str], features: Sequence) -> None:
+    from benchmark_design.ocr.lbd_coordinates import (
+        EXPRESSION_STRUCTURAL_DIFFICULTY_LABEL,
+        compute_lbd_coordinate_metrics,
+    )
+
+    metrics = compute_lbd_coordinate_metrics(features)
+    lines.extend(
+        [
+            "",
+            "## Table 10. Expression-level Structural Difficulty / 表达式结构难度",
+            "",
+            f"**{EXPRESSION_STRUCTURAL_DIFFICULTY_LABEL}** — structural difficulty of individual "
+            "expressions from L/B/D coordinates, not full-page image recognition difficulty.",
+            "",
+            "**L (token length):** L0 ≤ 20, L1 21–40, L2 > 40.  ",
+            "**B (structure breadth):** B0 0–1 types, B1 2 types, B2 ≥ 3 types.  ",
+            "**D (AST nesting depth):** D0 0–1, D1 2, D2 ≥ 3.",
+            "",
+            "Classification order: L1 (L0B0D0); L4 (≥2 of L2/B2/D2 with L≠L0 and D≠D0); "
+            "L2 (score=1, or score=2 with L≠L2 and D≠D2); L3 (all remaining).  ",
+            "27-cell counts: `tables/expression_lbd_coordinate_counts.csv`.  ",
+            "Example crops: `figures/lbd_coordinate_examples/<tier>/`.",
+            "",
+            "| Structural difficulty | Count | Share |",
+            "| --- | ---: | ---: |",
+        ]
+    )
+    for row in metrics.structural_difficulty_counts:
+        lines.append(f"| {row.structural_difficulty} | {row.count:,} | {_fmt_float(row.ratio)} |")
+
+
+def write_consolidated_markdown(
+    metrics: OcrConsolidatedMetrics,
+    output_path: Path,
+    *,
+    features: Sequence | None = None,
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "# OCR Benchmark Statistics Summary",
@@ -280,7 +319,7 @@ def write_consolidated_markdown(metrics: OcrConsolidatedMetrics, output_path: Pa
         f"- Expressions: {metrics.scale.expression_count:,}",
         f"- Total tokens: {metrics.scale.total_token_count:,}",
         "",
-        "Consolidated report for tables 1–9 (`LATEX_DICT` greedy tokenization).",
+        "Consolidated report for tables 1–10 (`LATEX_DICT` greedy tokenization).",
         "",
         "## Table 1. OCR Data Scale / OCR 数据规模",
         "",
@@ -418,39 +457,24 @@ def write_consolidated_markdown(metrics: OcrConsolidatedMetrics, output_path: Pa
             "",
             "Primary groups for the main narrative. Token ratio = group token count / all tokens; "
             "Expr. ratio = expressions with any group token / all expressions. "
-            "Co-occurrence counts expressions containing ≥2 distinct tokens from the same group. "
-            "Full token-by-token counts: `tables/appendix/confusable_token_counts.csv`.",
+            "Full token-by-token counts: `tables/appendix/confusable_token_counts.csv`. "
+            "Example crops for `4` and `\\varphi`: `figures/confusable_token_examples/greek-variant/`.",
             "",
-            "![Confusable token line-level examples](figures/confusable_token_examples.png)",
-            "",
-            "| Group | Representative tokens | Token count | Expr. count | Co-occurrence expr. count |",
-            "| --- | --- | ---: | ---: | ---: |",
+            "| Group | Representative tokens | Token count | Token ratio | Expr. count | Expr. ratio |",
+            "| --- | --- | ---: | ---: | ---: | ---: |",
         ]
     )
     for group_metrics in metrics.confusable.primary_groups:
-        group_name, representatives, token_count, expr_count, co_count = group_metrics.main_table_row()
+        group_name, representatives, token_count, token_ratio, expr_count, expr_ratio = (
+            group_metrics.main_table_row()
+        )
         lines.append(
-            f"| {group_name} | `{representatives}` | {token_count:,} | {expr_count:,} | {co_count:,} |"
+            f"| {group_name} | `{representatives}` | {token_count:,} | {_fmt_float(token_ratio)} | "
+            f"{expr_count:,} | {_fmt_float(expr_ratio)} |"
         )
 
-    lines.extend(
-        [
-            "",
-            "### Table 9 metrics (all groups)",
-            "",
-            "| Group | Token count | Token ratio | Expr. count | Expr. ratio | Co-occurrence expr. count | Dominant tokens | Rare-side tokens |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
-        ]
-    )
-    for group_metrics in metrics.confusable.all_groups():
-        dominant = ", ".join(f"`{token}`" for token in group_metrics.dominant_tokens) or "—"
-        rare_side = ", ".join(f"`{token}`" for token in group_metrics.rare_side_tokens) or "—"
-        lines.append(
-            f"| {group_metrics.group.name} | {group_metrics.token_count:,} | "
-            f"{_fmt_float(group_metrics.token_ratio)} | {group_metrics.expression_count:,} | "
-            f"{_fmt_float(group_metrics.expression_ratio)} | {group_metrics.co_occurrence_expression_count:,} | "
-            f"{dominant} | {rare_side} |"
-        )
+    if features is not None:
+        _append_structural_difficulty_table(lines, features)
 
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -486,6 +510,7 @@ def write_consolidated_report(
     *,
     output_root: Path | None = None,
     metadata_dir: Path | None = None,
+    features: Sequence | None = None,
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     root = output_root or output_dir
@@ -495,7 +520,7 @@ def write_consolidated_report(
     markdown_path = root / "ocr_benchmark_summary.md"
     metadata_path = metadata_dir / "ocr_benchmark_metadata.json"
 
-    write_consolidated_markdown(metrics, markdown_path)
+    write_consolidated_markdown(metrics, markdown_path, features=features)
     write_consolidated_metadata(
         metrics,
         output_path=metadata_path,
