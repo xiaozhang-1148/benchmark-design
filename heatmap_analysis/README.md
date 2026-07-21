@@ -141,5 +141,5 @@ pytest tests/test_heatmap.py tests/test_metrics.py tests/test_alignment.py \
 
 - 无模板时使用 Otsu/自适应阈值，印刷内容可能被计入笔迹
 - 大数据集可视化默认最多渲染 500 张单图 PNG（aggregate/cluster 不受影响）
-- UMAP/HDBSCAN 为可选依赖
+- UMAP/HDBSCAN 为可选依赖；HDBSCAN 在共享 PCA 后再投影到 **2 维** 上聚类（避免高维密度估计过慢）
 - 聚类标签仅描述空间布局模式，需结合外部变量谨慎解读

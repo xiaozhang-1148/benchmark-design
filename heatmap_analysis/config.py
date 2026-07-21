@@ -47,8 +47,8 @@ class ClusteringConfig:
     pca_n_components: int | None = None
     k_values: list[int] = field(default_factory=lambda: [2, 3, 4, 5, 6, 8, 10])
     gmm_components: list[int] = field(default_factory=lambda: list(range(2, 11)))
-    closest_samples: int = 20
-    boundary_samples: int = 20
+    closest_samples: int = 3
+    boundary_samples: int = 3
     random_seed: int = 42
     min_samples_for_clustering: int = 10
     separate_by_template: bool = False
@@ -66,7 +66,7 @@ class ClusteringConfig:
 @dataclass
 class ReportConfig:
     group_by: list[str] = field(default_factory=list)
-    representative_samples: int = 5
+    representative_samples: int = 3
     language: str = "zh-CN"
     colormap: str = "turbo"
     diff_colormap: str = "RdBu_r"
@@ -189,8 +189,8 @@ def load_config(path: Path) -> AnalysisConfig:
             pca_n_components=cl.get("pca_n_components"),
             k_values=list(cl.get("k_values", [2, 3, 4, 5, 6, 8, 10])),
             gmm_components=list(cl.get("gmm_components", list(range(2, 11)))),
-            closest_samples=int(cl.get("closest_samples", 20)),
-            boundary_samples=int(cl.get("boundary_samples", 20)),
+            closest_samples=int(cl.get("closest_samples", 3)),
+            boundary_samples=int(cl.get("boundary_samples", 3)),
             random_seed=int(cl.get("random_seed", 42)),
             min_samples_for_clustering=int(cl.get("min_samples_for_clustering", 10)),
             separate_by_template=cl.get("separate_by_template", False),
@@ -205,7 +205,7 @@ def load_config(path: Path) -> AnalysisConfig:
         ),
         report=ReportConfig(
             group_by=group_by_list,
-            representative_samples=int(rep.get("representative_samples", 5)),
+            representative_samples=int(rep.get("representative_samples", 3)),
             language=rep.get("language", "zh-CN"),
             colormap=rep.get("colormap", "turbo"),
             diff_colormap=rep.get("diff_colormap", "RdBu_r"),

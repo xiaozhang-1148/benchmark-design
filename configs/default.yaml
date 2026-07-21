@@ -1,12 +1,13 @@
 # DeepSeek-OCR-2 feature extraction & distribution analysis
-# Runtime: prefer /home/baoquan/ocr-process/ocr-pipeline/.venv/bin/python (vLLM>=0.19 + OCR2)
+# Env: uv sync --extra deepseek --extra analysis
+# vLLM OCR (Channel A): install vllm separately after sync (e.g. uv pip install "vllm==0.19.0")
 
 seed: 42
 
 model:
   name_or_path: "deepseek-ai/DeepSeek-OCR-2"
   # Local snapshot preferred when available
-  local_path: "/mnt/nvme_model/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-OCR-2/snapshots/aaa02f3811945a91062062994c5c4a3f4c0af2b0"
+  local_path: "/mnt/nvme_model/baoquan/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-OCR-2/snapshots/aaa02f3811945a91062062994c5c4a3f4c0af2b0"
   revision: "aaa02f3811945a91062062994c5c4a3f4c0af2b0"
   trust_remote_code: true
   dtype: "bfloat16"
@@ -19,15 +20,13 @@ model:
   attn_implementation: "eager"
 
 data:
-  input_dir: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark"
+  input_dir: "/mnt/nvme_user/baoquan/Label_Data/images_folder"
   image_extensions: [".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"]
   recursive: true
 
 paths:
-  output_root: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark_export_1/deepseek"
+  output_root: "/home/baoquan/benchmark/deepseek"
   reports_dir: null  # default: {output_root}/reports
-  # Local project reports symlink/copy target for repo-relative reports/
-  project_reports_dir: "reports"
 
 prompt: "<image>\n<|grounding|>Convert the document to markdown."
 
@@ -38,9 +37,11 @@ vllm:
   top_p: 1.0
   max_tokens: 4096
   max_model_len: 8192
-  tensor_parallel_size: null  # null = auto (1 if single-GPU run)
+  # OCR-2 fits one A10 (~6GB). Use data parallel across GPUs, NOT tensor parallel.
+  tensor_parallel_size: 1
+  data_parallel_size: auto   # auto = all visible GPUs (16); or set e.g. 8
   gpu_memory_utilization: 0.90
-  max_num_seqs: null  # null = auto via benchmark
+  max_num_seqs: 16  # per-GPU concurrency; override via benchmark best_config if present
   enforce_eager: false
   trust_remote_code: true
   hf_overrides:
@@ -54,7 +55,7 @@ vllm:
   retry_max: 3
   retry_backoff_sec: 2.0
   request_timeout_sec: 600
-  # Async image IO
+  # Async image IO (per worker)
   prefetch_workers: 8
   decode_workers: 8
 
@@ -69,9 +70,18 @@ visual:
   pool_causal_flow_only: true
   # If true, also average SAM global-view features at middle SAM layer (not default)
   use_sam_middle_layer: false
+  data_parallel_size: auto   # auto = all visible GPUs
 
 recognition:
-  extract_decoder_embedding: false
+  extract_decoder_embedding: false  # content stats only; no text embedding
+
+# OCR quality channel — filter/diagnostics only (never enters recognition PCA)
+ocr_quality:
+  repetition_ratio_threshold: 0.35
+  catastrophic_ngram_repeat: 20
+  invalid_char_rate_threshold: 0.05
+  extreme_line_count: 400
+  extreme_formula_count: 80
 
 benchmark:
   enabled: true
@@ -99,6 +109,7 @@ pipeline:
     - benchmark
     - vllm_ocr
     - parse_layout
+    - parse_ocr_quality
     - parse_recognition
     - visual_features
     - analyze

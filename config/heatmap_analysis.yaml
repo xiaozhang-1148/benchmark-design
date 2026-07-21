@@ -1,5 +1,5 @@
 input:
-  dataset_dir: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark"
+  dataset_dir: "/mnt/nvme_user/baoquan/Label_Data/images_folder"
   metadata_file: null
   image_column: "image_path"
   id_column: "image_id"
@@ -26,23 +26,23 @@ heatmap:
 clustering:
   pca_variance: 0.95
   pca_n_components: null
-  k_values: [2, 3, 4, 5, 6, 8, 10]
-  gmm_components: [2, 3, 4, 5, 6, 7, 8, 9, 10]
-  closest_samples: 20
-  boundary_samples: 20
+  k_values: [2, 3, 4, 6, 8, 10]
+  gmm_components: [2, 3, 9, 10]
+  closest_samples: 3
+  boundary_samples: 3
   random_seed: 42
   min_samples_for_clustering: 10
   separate_by_template: false
 
 report:
   group_by: null
-  representative_samples: 20
+  representative_samples: 3
   language: "zh-CN"
   colormap: "turbo"
   diff_colormap: "RdBu_r"
 
 output:
-  output_dir: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark_export_1/hotmap"
+  output_dir: "/home/baoquan/benchmark/hotmap"
   cache_dir: null
   resume: true
 

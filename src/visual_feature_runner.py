@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +19,18 @@ from tqdm import tqdm
 from .config import fingerprint_config, load_config, model_resolved_path
 from .feature_store import EmbeddingStore
 from .model_compat import patch_transformers_for_deepseek_ocr2
-from .utils import ensure_dir, l2_normalize, load_image_rgb
+from .utils import atomic_write_json, ensure_dir, l2_normalize, load_image_rgb
+
+
+def _resolve_visual_data_parallel(cfg: dict[str, Any]) -> int:
+    raw = (cfg.get("visual") or {}).get("data_parallel_size", "auto")
+    try:
+        n_gpu = int(torch.cuda.device_count())
+    except Exception:
+        n_gpu = 1
+    if raw is None or raw == "auto":
+        return max(1, n_gpu)
+    return max(1, min(int(raw), max(1, n_gpu)))
 
 
 def _dynamic_preprocess(image: Image.Image, min_num=2, max_num=6, image_size=768, use_thumbnail=False):
@@ -217,6 +230,108 @@ class VisualLayerExtractor:
             handle.remove()
 
 
+def _run_visual_pending_on_device(
+    cfg: dict[str, Any],
+    pending: list[dict[str, Any]],
+    fp: str,
+    shard_dir: Path,
+    worker_tag: str = "",
+) -> dict[str, Any]:
+    """Embed pending rows; write shard index + npy. Returns meta dict."""
+    ensure_dir(shard_dir)
+    tag = f"[{worker_tag}] " if worker_tag else ""
+    # After CUDA_VISIBLE_DEVICES, always use cuda:0
+    cfg = dict(cfg)
+    cfg["visual"] = dict(cfg.get("visual") or {})
+    cfg["visual"]["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+
+    extractor = VisualLayerExtractor(cfg)
+    rows: list[dict[str, Any]] = []
+    vecs: list[np.ndarray] = []
+    fails: list[dict[str, Any]] = []
+    dim = None
+    for r in tqdm(pending, desc=f"visual_embed{tag}"):
+        iid = str(r["image_id"])
+        try:
+            img = load_image_rgb(r["absolute_path"])
+            out = extractor.embed_image(img)
+            if dim is None:
+                dim = int(out["embedding_dim"])
+            elif out["embedding_dim"] != dim:
+                raise RuntimeError(f"dim mismatch {out['embedding_dim']} vs {dim}")
+            rows.append(
+                {
+                    "image_id": iid,
+                    "selected_layer": out["selected_layer"],
+                    "token_count": out["token_count"],
+                    "embedding_norm_before_normalization": out["norm_before"],
+                    "config_fingerprint": fp,
+                }
+            )
+            vecs.append(out["embedding"].astype(np.float32))
+        except Exception as e:  # noqa: BLE001
+            fails.append(
+                {
+                    "image_id": iid,
+                    "error_message": f"{type(e).__name__}: {e}",
+                    "config_fingerprint": fp,
+                }
+            )
+
+    index_path = shard_dir / "index.parquet"
+    vec_path = shard_dir / "embeddings.f32.npy"
+    fail_path = shard_dir / "failures.parquet"
+    if rows:
+        pd.DataFrame(rows).to_parquet(index_path, index=False)
+        np.save(vec_path, np.stack(vecs, axis=0))
+    else:
+        pd.DataFrame(columns=["image_id"]).to_parquet(index_path, index=False)
+        np.save(vec_path, np.zeros((0, dim or 896), dtype=np.float32))
+    if fails:
+        pd.DataFrame(fails).to_parquet(fail_path, index=False)
+
+    meta = {
+        "ok": True,
+        "n_ok": len(rows),
+        "n_fail": len(fails),
+        "dim": int(dim or 896),
+        "selected_layer": int(extractor.selected_layer),
+        "num_layers": int(extractor.num_layers),
+        "index_path": str(index_path),
+        "vec_path": str(vec_path),
+        "fail_path": str(fail_path) if fails else None,
+    }
+    del extractor
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return meta
+
+
+def _visual_dp_entry(payload: dict[str, Any], result_path: str) -> None:
+    gpu_id = int(payload["gpu_id"])
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    try:
+        meta = _run_visual_pending_on_device(
+            payload["cfg"],
+            payload["pending"],
+            payload["fp"],
+            Path(payload["shard_dir"]),
+            worker_tag=f"w{payload['worker_id']}/gpu{gpu_id}",
+        )
+        meta.update({"worker_id": payload["worker_id"], "gpu_id": gpu_id})
+    except Exception as e:  # noqa: BLE001
+        traceback.print_exc()
+        meta = {
+            "worker_id": payload["worker_id"],
+            "gpu_id": gpu_id,
+            "ok": False,
+            "n_ok": 0,
+            "n_fail": 0,
+            "error": f"{type(e).__name__}: {e}",
+        }
+    Path(result_path).write_text(json.dumps(meta), encoding="utf-8")
+
+
 def run_visual_features(cfg: dict[str, Any]) -> pd.DataFrame:
     out_dir = Path(cfg["paths"]["outputs_dir"])
     man = pd.read_parquet(out_dir / "manifest.parquet")
@@ -238,105 +353,157 @@ def run_visual_features(cfg: dict[str, Any]) -> pd.DataFrame:
         if cfg["model"].get("selected_layer") is None:
             cfg["model"]["selected_layer"] = info.get("selected_layer_index")
 
-    # Dim unknown until first sample — probe from introspection pooled shape or 896
     dim = 896
     if intro.exists():
         shape = json.loads(intro.read_text()).get("selected_layer_output_shape")
         if shape and len(shape) >= 3:
             dim = int(shape[-1])
 
+    resume = bool(cfg.get("pipeline", {}).get("resume", True))
     store = EmbeddingStore(
         mmap_path=out_dir / "visual_embeddings.f32.mmap",
         index_path=out_dir / "visual_index.parquet",
         dim=dim,
     )
-    done = store.done_ids if cfg.get("pipeline", {}).get("resume", True) else set()
-    # Also check fingerprint in a side table
-    meta_path = out_dir / "visual_run_meta.json"
-    if meta_path.exists():
-        old = json.loads(meta_path.read_text())
-        if old.get("config_fingerprint") != fp:
-            print("[visual] config fingerprint changed; not deleting old store, but will rewrite overlapping ids")
-            # For safety we skip only exact done ids; user can delete outputs to fully invalidate
+    done = store.done_ids if resume else set()
+    if not resume:
+        # Full rebuild: wipe previous visual store
+        for p in (
+            out_dir / "visual_embeddings.f32.mmap",
+            out_dir / "visual_index.parquet",
+            out_dir / "visual_embeddings.f32.meta.json",
+            out_dir / "visual_failures.parquet",
+        ):
+            if p.exists():
+                p.unlink()
+        store = EmbeddingStore(
+            mmap_path=out_dir / "visual_embeddings.f32.mmap",
+            index_path=out_dir / "visual_index.parquet",
+            dim=dim,
+        )
+        done = set()
 
+    meta_path = out_dir / "visual_run_meta.json"
     pending = man[~man["image_id"].astype(str).isin(done)].to_dict("records")
     limit = cfg.get("pipeline", {}).get("limit")
     if limit is not None:
         pending = pending[: max(0, int(limit) - len(done))]
 
-    print(f"[visual] pending={len(pending)} done={len(done)} dim={dim}")
+    n_workers = _resolve_visual_data_parallel(cfg)
+    print(f"[visual] pending={len(pending)} done={len(done)} dim={dim} data_parallel={n_workers}", flush=True)
     if not pending:
         return store._index
 
-    extractor = VisualLayerExtractor(cfg)
-    # If actual dim differs, rebuild store
-    if extractor.hidden_dim and extractor.hidden_dim != dim:
-        # will be set after first embed
-        pass
+    if n_workers == 1:
+        shard_dir = out_dir / "visual_shards" / "w0"
+        meta = _run_visual_pending_on_device(cfg, pending, fp, shard_dir, worker_tag="w0")
+        results = [meta]
+    else:
+        import multiprocessing as mp
 
-    buf_rows = []
-    buf_vecs = []
-    flush_every = 32
-    for r in tqdm(pending, desc="visual_embed"):
-        iid = str(r["image_id"])
-        try:
-            img = load_image_rgb(r["absolute_path"])
-            out = extractor.embed_image(img)
-            if out["embedding_dim"] != store.dim:
-                # Recreate store with correct dim if empty
-                if len(store.done_ids) == 0 and not buf_rows:
-                    store = EmbeddingStore(
-                        mmap_path=out_dir / "visual_embeddings.f32.mmap",
-                        index_path=out_dir / "visual_index.parquet",
-                        dim=out["embedding_dim"],
-                    )
-                else:
-                    raise RuntimeError(
-                        f"embedding dim mismatch: got {out['embedding_dim']} expected {store.dim}"
-                    )
-            buf_rows.append(
+        shards: list[list[dict[str, Any]]] = [[] for _ in range(n_workers)]
+        for i, row in enumerate(pending):
+            shards[i % n_workers].append(row)
+        shard_root = out_dir / "visual_shards"
+        ensure_dir(shard_root)
+        payloads = []
+        for wid, shard in enumerate(shards):
+            if not shard:
+                continue
+            payloads.append(
                 {
-                    "image_id": iid,
-                    "selected_layer": out["selected_layer"],
-                    "token_count": out["token_count"],
-                    "embedding_norm_before_normalization": out["norm_before"],
-                    "config_fingerprint": fp,
+                    "worker_id": wid,
+                    "gpu_id": wid,
+                    "cfg": cfg,
+                    "pending": shard,
+                    "fp": fp,
+                    "shard_dir": str(shard_root / f"w{wid}"),
                 }
             )
-            buf_vecs.append(out["embedding"])
-        except Exception as e:  # noqa: BLE001
-            # record failure in a sidecar; do not stop
-            fail_path = out_dir / "visual_failures.parquet"
-            fail_row = pd.DataFrame(
-                [{"image_id": iid, "error_message": f"{type(e).__name__}: {e}", "config_fingerprint": fp}]
+        ctx = mp.get_context("spawn")
+        print(f"[visual] launching {len(payloads)} non-daemon GPU workers (spawn)", flush=True)
+        procs = []
+        result_paths = []
+        for payload in payloads:
+            rp = shard_root / f"result.w{payload['worker_id']}.json"
+            if rp.exists():
+                rp.unlink()
+            result_paths.append(rp)
+            p = ctx.Process(
+                target=_visual_dp_entry,
+                args=(payload, str(rp)),
+                daemon=False,
+                name=f"visual_gpu{payload['gpu_id']}",
             )
-            if fail_path.exists():
-                oldf = pd.read_parquet(fail_path)
-                fail_row = pd.concat([oldf, fail_row], ignore_index=True).drop_duplicates("image_id", keep="last")
-            fail_row.to_parquet(fail_path, index=False)
+            p.start()
+            procs.append(p)
+        for p in procs:
+            p.join()
+        results = []
+        for rp, p in zip(result_paths, procs):
+            if rp.exists():
+                results.append(json.loads(rp.read_text(encoding="utf-8")))
+            else:
+                results.append({"ok": False, "error": f"no result exit={p.exitcode}", "n_ok": 0})
+
+    # Merge shards into EmbeddingStore (single-writer)
+    fail_rows = []
+    selected_layer = cfg["model"].get("selected_layer")
+    num_layers = None
+    for meta in results:
+        status = "OK" if meta.get("ok") else f"FAIL {meta.get('error')}"
+        print(
+            f"[visual] worker={meta.get('worker_id')} gpu={meta.get('gpu_id')} "
+            f"ok={meta.get('n_ok')} fail={meta.get('n_fail')} {status}",
+            flush=True,
+        )
+        if not meta.get("ok"):
             continue
+        if meta.get("selected_layer") is not None:
+            selected_layer = meta["selected_layer"]
+        if meta.get("num_layers") is not None:
+            num_layers = meta["num_layers"]
+        idx_p = Path(meta["index_path"])
+        vec_p = Path(meta["vec_path"])
+        if not idx_p.exists() or not vec_p.exists():
+            continue
+        idx_df = pd.read_parquet(idx_p)
+        if len(idx_df) == 0:
+            continue
+        vecs = np.load(vec_p)
+        if store.dim != int(meta.get("dim") or store.dim) and len(store.done_ids) == 0:
+            store = EmbeddingStore(
+                mmap_path=out_dir / "visual_embeddings.f32.mmap",
+                index_path=out_dir / "visual_index.parquet",
+                dim=int(meta["dim"]),
+            )
+        store.append_many(idx_df.to_dict("records"), vecs)
+        if meta.get("fail_path") and Path(meta["fail_path"]).exists():
+            fail_rows.append(pd.read_parquet(meta["fail_path"]))
 
-        if len(buf_rows) >= flush_every:
-            store.append_many(buf_rows, np.stack(buf_vecs, axis=0))
-            buf_rows, buf_vecs = [], []
+    if fail_rows:
+        fail_df = pd.concat(fail_rows, ignore_index=True).drop_duplicates("image_id", keep="last")
+        fail_path = out_dir / "visual_failures.parquet"
+        if fail_path.exists() and resume:
+            oldf = pd.read_parquet(fail_path)
+            fail_df = pd.concat([oldf, fail_df], ignore_index=True).drop_duplicates("image_id", keep="last")
+        fail_df.to_parquet(fail_path, index=False)
 
-    if buf_rows:
-        store.append_many(buf_rows, np.stack(buf_vecs, axis=0))
-
-    from .utils import atomic_write_json
+    failed_workers = [r for r in results if not r.get("ok")]
+    if len(failed_workers) == len(results):
+        raise RuntimeError(f"all visual GPU workers failed: {failed_workers[0] if failed_workers else None}")
 
     atomic_write_json(
         meta_path,
         {
             "config_fingerprint": fp,
-            "selected_layer": extractor.selected_layer,
-            "num_layers": extractor.num_layers,
+            "selected_layer": selected_layer,
+            "num_layers": num_layers,
             "embedding_dim": store.dim,
             "n_embeddings": len(store.done_ids),
+            "data_parallel": n_workers,
         },
     )
-    del extractor
-    torch.cuda.empty_cache() if torch.cuda.is_available() else None
     return store._index
 
 

@@ -288,12 +288,7 @@ def run_introspection(cfg: dict[str, Any]) -> dict[str, Any]:
     cfg["model"]["visual_layer_total"] = int(n_layers)
 
     md = _format_markdown(result)
-    # Write both to output reports and project reports/
     atomic_write_text(reports / "model_introspection.md", md)
-    proj_reports = Path(cfg["paths"].get("project_reports_dir", "reports"))
-    ensure_dir(proj_reports)
-    atomic_write_text(proj_reports / "model_introspection.md", md)
-    atomic_write_json(proj_reports / "model_introspection.json", result)
 
     # Free model
     del model

@@ -1,11 +1,9 @@
-"""Parse recognition / OCR text into explicit statistical features."""
+"""Parse OCR text into explicit *content* features (no quality fields)."""
 
 from __future__ import annotations
 
 import argparse
-import math
 import re
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -14,68 +12,75 @@ import pandas as pd
 
 from .config import load_config
 from .feature_store import atomic_replace_parquet
-from .utils import ensure_dir
+from .utils import atomic_write_json, ensure_dir
 
+# Content-only schema (quality lives in ocr_quality.parquet)
 RECOG_COLUMNS = [
     "image_id",
-    "output_token_count",
     "output_character_count",
     "line_count",
-    "markdown_heading_count",
-    "formula_count",
-    "formula_character_ratio",
-    "digit_ratio",
-    "latin_ratio",
+    "non_empty_line_count",
+    "non_empty_line_ratio",
+    "mean_line_length",
+    "formula_line_ratio",
     "chinese_ratio",
-    "math_symbol_ratio",
+    "latin_ratio",
+    "digit_ratio",
+    "math_operator_ratio",
+    "bracket_ratio",
+    "punctuation_ratio",
     "whitespace_ratio",
-    "repetition_ratio",
-    "mean_generated_token_logprob",
-    "logprob_available",
+    "equals_count",
+    "frac_count",
+    "sqrt_count",
+    "subscript_count",
+    "superscript_count",
+    "vector_symbol_count",
+    "angle_symbol_count",
+    "latex_env_count",
+    "math_structure_per_line",
+    "formula_span_count",
+    "formula_character_ratio",
+    "content_morphology",
 ]
 
-MATH_SYMBOLS = set("∑∏∫√∞≈≠≤≥±×÷∂∇∈∉⊂⊃∪∩∧∨⇒⇔∀∃°′″^_{}[]\\|<>±µπθαβγΔΩ")
+MATH_OPS = set("+-*/=<>≤≥≠≈±×÷∑∏∫∂∇^_")
+BRACKETS = set("()[]{}（）【】")
+PUNCT = set(".,;:!?，。；：！？、·…\"'`")
 
 
-def _char_class_ratios(text: str) -> dict[str, float]:
+MORPHOLOGY_RULES = {
+    "plain_text": "formula_character_ratio < 0.05 and formula_line_ratio < 0.1 and figure-like markers absent",
+    "text_formula_mix": "0.05 <= formula_character_ratio < 0.25 or 0.1 <= formula_line_ratio < 0.4",
+    "formula_heavy": "formula_character_ratio >= 0.25 or formula_line_ratio >= 0.4 or math_structure_per_line >= 1.5",
+    "figure_caption": "contains figure/image grounding labels or low char density with figure markers",
+}
+
+
+def _char_ratios(text: str) -> dict[str, float]:
     if not text:
         return {
-            "digit_ratio": 0.0,
-            "latin_ratio": 0.0,
             "chinese_ratio": 0.0,
-            "math_symbol_ratio": 0.0,
+            "latin_ratio": 0.0,
+            "digit_ratio": 0.0,
+            "math_operator_ratio": 0.0,
+            "bracket_ratio": 0.0,
+            "punctuation_ratio": 0.0,
             "whitespace_ratio": 0.0,
         }
     n = len(text)
-    digit = sum(ch.isdigit() for ch in text)
-    latin = sum(("a" <= ch.lower() <= "z") for ch in text)
-    chinese = sum("\u4e00" <= ch <= "\u9fff" for ch in text)
-    math = sum((ch in MATH_SYMBOLS) or (ch in "+-*/=<>^_") for ch in text)
-    ws = sum(ch.isspace() for ch in text)
     return {
-        "digit_ratio": digit / n,
-        "latin_ratio": latin / n,
-        "chinese_ratio": chinese / n,
-        "math_symbol_ratio": math / n,
-        "whitespace_ratio": ws / n,
+        "chinese_ratio": sum("\u4e00" <= ch <= "\u9fff" for ch in text) / n,
+        "latin_ratio": sum("a" <= ch.lower() <= "z" for ch in text) / n,
+        "digit_ratio": sum(ch.isdigit() for ch in text) / n,
+        "math_operator_ratio": sum(ch in MATH_OPS for ch in text) / n,
+        "bracket_ratio": sum(ch in BRACKETS for ch in text) / n,
+        "punctuation_ratio": sum(ch in PUNCT for ch in text) / n,
+        "whitespace_ratio": sum(ch.isspace() for ch in text) / n,
     }
 
 
-def _repetition_ratio(text: str, ngram: int = 8) -> float:
-    """Fraction of characters covered by the most frequent repeated n-gram window."""
-    if len(text) < ngram * 2:
-        return 0.0
-    grams = [text[i : i + ngram] for i in range(0, len(text) - ngram + 1, ngram)]
-    if not grams:
-        return 0.0
-    c = Counter(grams)
-    top, cnt = c.most_common(1)[0]
-    if cnt <= 1:
-        return 0.0
-    return min(1.0, (cnt * len(top)) / max(len(text), 1))
-
-
-def _formula_stats(text: str) -> tuple[int, float]:
+def _formula_spans(text: str) -> tuple[int, float]:
     patterns = [
         r"\$\$.*?\$\$",
         r"\$[^$]+\$",
@@ -83,48 +88,106 @@ def _formula_stats(text: str) -> tuple[int, float]:
         r"\\\[.*?\\\]",
         r"<\|ref\|>formula<\|/ref\|>",
     ]
-    spans = []
+    spans: list[list[int]] = []
     for pat in patterns:
         for m in re.finditer(pat, text, flags=re.DOTALL):
-            spans.append((m.start(), m.end()))
-    # merge overlaps
+            spans.append([m.start(), m.end()])
     spans.sort()
-    merged = []
+    merged: list[list[int]] = []
     for s, e in spans:
         if not merged or s > merged[-1][1]:
             merged.append([s, e])
         else:
             merged[-1][1] = max(merged[-1][1], e)
     formula_chars = sum(e - s for s, e in merged)
-    return len(merged), (formula_chars / max(len(text), 1))
+    return len(merged), formula_chars / max(len(text), 1)
 
 
-def extract_recognition_features(
-    image_id: str,
+def _math_structure_counts(text: str) -> dict[str, int]:
+    return {
+        "equals_count": text.count("=") + text.count("＝"),
+        "frac_count": len(re.findall(r"\\frac\b|／|/", text)),
+        "sqrt_count": len(re.findall(r"\\sqrt\b|√", text)),
+        "subscript_count": len(re.findall(r"_[\{a-zA-Z0-9]|_", text)),
+        "superscript_count": len(re.findall(r"\^[\{a-zA-Z0-9]|\^", text)),
+        "vector_symbol_count": len(re.findall(r"\\vec\b|\\mathbf\b|→|⃗", text)),
+        "angle_symbol_count": len(re.findall(r"\\angle\b|∠|°", text)),
+        "latex_env_count": len(re.findall(r"\\begin\{[^}]+\}", text)),
+    }
+
+
+def _is_formula_line(ln: str) -> bool:
+    s = ln.strip()
+    if not s:
+        return False
+    if s.startswith("$$") or s.startswith("\\[") or s.startswith("\\("):
+        return True
+    if "$" in s and any(c in s for c in "=+-*/\\^_{}"):
+        return True
+    if "<|ref|>formula" in s.lower():
+        return True
+    return False
+
+
+def _content_morphology(
+    *,
     text: str,
-    output_token_count: int | None = None,
-    mean_logprob: float | None = None,
-) -> dict[str, Any]:
+    formula_character_ratio: float,
+    formula_line_ratio: float,
+    math_structure_per_line: float,
+) -> str:
+    low = text.lower()
+    figure_like = any(
+        k in low
+        for k in (
+            "<|ref|>figure",
+            "<|ref|>image",
+            "<|ref|>picture",
+            "![",
+        )
+    )
+    if figure_like and formula_character_ratio < 0.15 and len(text) < 800:
+        return "figure_caption"
+    if formula_character_ratio >= 0.25 or formula_line_ratio >= 0.4 or math_structure_per_line >= 1.5:
+        return "formula_heavy"
+    if formula_character_ratio >= 0.05 or formula_line_ratio >= 0.1:
+        return "text_formula_mix"
+    return "plain_text"
+
+
+def extract_recognition_features(image_id: str, text: str) -> dict[str, Any]:
     text = text or ""
     lines = text.splitlines()
-    formula_count, formula_ratio = _formula_stats(text)
-    ratios = _char_class_ratios(text)
-    feat = {
+    non_empty = [ln for ln in lines if ln.strip()]
+    n_lines = max(len(lines), 1)
+    formula_span_count, formula_character_ratio = _formula_spans(text)
+    formula_lines = sum(1 for ln in lines if _is_formula_line(ln))
+    formula_line_ratio = formula_lines / n_lines
+    structs = _math_structure_counts(text)
+    struct_total = sum(structs.values())
+    math_per_line = struct_total / max(len(non_empty), 1)
+    ratios = _char_ratios(text)
+    morphology = _content_morphology(
+        text=text,
+        formula_character_ratio=formula_character_ratio,
+        formula_line_ratio=formula_line_ratio,
+        math_structure_per_line=math_per_line,
+    )
+    feat: dict[str, Any] = {
         "image_id": image_id,
-        "output_token_count": int(output_token_count) if output_token_count is not None else len(text.split()),
         "output_character_count": len(text),
         "line_count": len(lines),
-        "markdown_heading_count": sum(1 for ln in lines if ln.lstrip().startswith("#")),
-        "formula_count": formula_count,
-        "formula_character_ratio": formula_ratio,
+        "non_empty_line_count": len(non_empty),
+        "non_empty_line_ratio": len(non_empty) / n_lines,
+        "mean_line_length": float(np.mean([len(ln) for ln in non_empty])) if non_empty else 0.0,
+        "formula_line_ratio": float(formula_line_ratio),
         **ratios,
-        "repetition_ratio": _repetition_ratio(text),
-        "mean_generated_token_logprob": mean_logprob,
-        "logprob_available": mean_logprob is not None and not (isinstance(mean_logprob, float) and math.isnan(mean_logprob)),
+        **structs,
+        "math_structure_per_line": float(math_per_line),
+        "formula_span_count": int(formula_span_count),
+        "formula_character_ratio": float(formula_character_ratio),
+        "content_morphology": morphology,
     }
-    # log1p versions for count-like fields
-    for key in ["output_token_count", "output_character_count", "line_count", "markdown_heading_count", "formula_count"]:
-        feat[f"{key}_log1p"] = float(np.log1p(feat[key]))
     return feat
 
 
@@ -146,24 +209,17 @@ def run_parse_recognition(cfg: dict[str, Any]) -> pd.DataFrame:
             text = text_path.read_text(encoding="utf-8", errors="replace")
         else:
             text = str(r.get("text") or "")
-        mean_lp = r.get("mean_generated_token_logprob")
-        if mean_lp is not None and (isinstance(mean_lp, float) and (math.isnan(mean_lp))):
-            mean_lp = None
-        if pd.isna(mean_lp):
-            mean_lp = None
-        tok_count = r.get("output_token_count")
-        if tok_count is not None and pd.isna(tok_count):
-            tok_count = None
-        rows.append(
-            extract_recognition_features(
-                image_id,
-                text,
-                output_token_count=int(tok_count) if tok_count is not None else None,
-                mean_logprob=float(mean_lp) if mean_lp is not None else None,
-            )
-        )
+        rows.append(extract_recognition_features(image_id, text))
     df = pd.DataFrame(rows)
+    for c in RECOG_COLUMNS:
+        if c not in df.columns:
+            df[c] = None
+    df = df[RECOG_COLUMNS]
     atomic_replace_parquet(df, out_dir / "recognition_features.parquet")
+    atomic_write_json(out_dir / "recognition_morphology_rules.json", MORPHOLOGY_RULES)
+    reports = Path(cfg["paths"]["reports_dir"])
+    ensure_dir(reports)
+    atomic_write_json(reports / "recognition_morphology_rules.json", MORPHOLOGY_RULES)
     return df
 
 

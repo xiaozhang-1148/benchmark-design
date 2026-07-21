@@ -7,12 +7,13 @@ name = "benchmark-design"
 version = "0.1.0"
 description = "Benchmark dataset analysis for OCR / layout / visual metrics"
 readme = "README.md"
-requires-python = ">=3.10"
+# Official DeepSeek-OCR-2 README: python 3.12.9; 3.11 also works.
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "rich>=13.0",
     "matplotlib>=3.8",
     "Pillow>=10.0",
-    "numpy>=1.26",
+    "numpy>=1.26,<2.2",
     "opencv-python-headless>=4.8",
     "pandas>=2.1",
     "pyarrow>=14.0",
@@ -30,14 +31,54 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 gpu = ["cupy-cuda12x>=13.0"]
-deepseek = [
-    "torch>=2.6",
-    "transformers>=4.51",
-    "vllm>=0.19",
-    "umap-learn>=0.5",
-    "faiss-cpu>=1.7",
-    "addict>=2.4",
+
+# Required for plot stage (UMAP hard-fails if missing). Pin numba/llvmlite for py3.12.
+# Do NOT use a name starting with "deepseek" — uv --extra deepseek is a prefix match.
+#   uv sync --extra deepseek --extra analysis
+analysis = [
+    "umap-learn>=0.5.7",
+    "numba>=0.60.0",
+    "llvmlite>=0.43.0",
 ]
+
+# DeepSeek-OCR-2 (https://github.com/deepseek-ai/DeepSeek-OCR-2)
+#   uv sync --extra deepseek
+# Optional: pip install flash-attn==2.7.3 --no-build-isolation
+# vLLM OCR: install separately after sync (conflicts with the deepseek extra).
+deepseek = [
+    "torch==2.6.0",
+    "torchvision==0.21.0",
+    "torchaudio==2.6.0",
+    "transformers==4.46.3",
+    "tokenizers==0.20.3",
+    "safetensors>=0.4.0",
+    "accelerate>=0.26.0",
+    "addict",
+    "einops",
+    "easydict",
+    "PyMuPDF",
+    "img2pdf",
+    "requests>=2.31",
+]
+
+[tool.uv]
+package = true
+
+# Cluster CUDA 12.8; official README uses cu118 — cu124 is the matching PyTorch index.
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+torchaudio = { index = "pytorch-cu124" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["benchmark_design", "heatmap_analysis", "src"]

@@ -1,4 +1,9 @@
-# Smoke / correctness run (10 images). Copy of default with limits.
+# Full re-run on all visible GPUs (data parallel for OCR + visual).
+# Usage:
+#   uv run -m src.pipeline --config configs/full_gpu.yaml
+#
+# Clears OCR/visual caches via resume:false; uses all GPUs (data_parallel_size: auto).
+
 seed: 42
 
 model:
@@ -23,15 +28,16 @@ paths:
 prompt: "<image>\n<|grounding|>Convert the document to markdown."
 
 vllm:
-  enabled: false
+  enabled: true
   dtype: "bfloat16"
   temperature: 0.0
   top_p: 1.0
-  max_tokens: 2048
+  max_tokens: 4096
   max_model_len: 8192
   tensor_parallel_size: 1
-  gpu_memory_utilization: 0.85
-  max_num_seqs: 4
+  data_parallel_size: auto
+  gpu_memory_utilization: 0.90
+  max_num_seqs: 16
   enforce_eager: false
   trust_remote_code: true
   hf_overrides:
@@ -43,8 +49,9 @@ vllm:
   quantization: null
   retry_max: 3
   retry_backoff_sec: 2.0
-  prefetch_workers: 4
-  decode_workers: 4
+  request_timeout_sec: 600
+  prefetch_workers: 8
+  decode_workers: 8
 
 visual:
   batch_size: 1
@@ -54,37 +61,51 @@ visual:
   device: "cuda"
   pool_causal_flow_only: true
   use_sam_middle_layer: false
+  data_parallel_size: auto
 
 recognition:
   extract_decoder_embedding: false
 
+ocr_quality:
+  repetition_ratio_threshold: 0.35
+  catastrophic_ngram_repeat: 20
+  invalid_char_rate_threshold: 0.05
+  extreme_line_count: 400
+  extreme_formula_count: 80
+
+# Skip auto-tuning; full_gpu.yaml already sets max_num_seqs / gpu_memory_utilization.
+# Still requires: uv pip install "vllm==0.19.0" in this project's .venv for vllm_ocr.
 benchmark:
   enabled: false
-  sample_size: 8
-  max_num_seqs_candidates: [2, 4]
-  gpu_memory_utilization_candidates: [0.80, 0.85]
-  prefetch_workers_candidates: [4]
-  skip_if_exists: false
+  sample_size: 100
+  max_num_seqs_candidates: [8, 16]
+  gpu_memory_utilization_candidates: [0.90]
+  prefetch_workers_candidates: [8]
+  skip_if_exists: true
 
 analysis:
   knn_k: 15
-  umap_n_neighbors: 15
+  umap_n_neighbors: 30
   umap_min_dist: 0.1
   umap_max_samples: 30000
-  contact_sheet_anchors: 4
+  contact_sheet_anchors: 8
   contact_sheet_neighbors: 5
-  distance_matrix_sample_size: 50
-  pca_n_components: 16
-  figure_dpi: 150
+  distance_matrix_sample_size: 500
+  pca_n_components: 64
+  figure_dpi: 200
 
 pipeline:
   stages:
     - inspect_model
     - build_manifest
-    # smoke: visual channel only (fast). Full OCR: use configs/default.yaml + uv sync --extra deepseek
+    # benchmark skipped (enabled:false); needs vllm — install once, then optional
+    - vllm_ocr
+    - parse_layout
+    - parse_ocr_quality
+    - parse_recognition
     - visual_features
     - analyze
     - plot
     - report
-  resume: true
-  limit: 10
+  resume: false
+  limit: null

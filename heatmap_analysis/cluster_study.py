@@ -78,7 +78,12 @@ def _feature_matrix(grid_map: dict[str, np.ndarray], ids: list[str]) -> np.ndarr
     return np.stack([flatten_heatmap(grid_map[i]) for i in ids])
 
 
-def fit_pca(cfg: AnalysisConfig, X: np.ndarray) -> tuple[np.ndarray, float, int]:
+def fit_pca(cfg: AnalysisConfig, X: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, int]:
+    """Return (X_scaled for KMeans/GMM, X_pca unscaled for HDBSCAN, cumvar, n_comp).
+
+    Unscaled PCA keeps variance ordering so the first 2 components remain informative.
+    Scaling after PCA equalizes axes and makes a second PCA→2D nearly isotropic (~2/d variance).
+    """
     use_gpu = cfg.gpu.enabled and cfg.gpu.clustering and is_gpu_available()
     X_pca, cumvar, n_comp = pca_reduce(
         X,
@@ -87,7 +92,7 @@ def fit_pca(cfg: AnalysisConfig, X: np.ndarray) -> tuple[np.ndarray, float, int]
         cfg.clustering.random_seed,
         use_gpu=use_gpu,
     )
-    return StandardScaler().fit_transform(X_pca), cumvar, n_comp
+    return StandardScaler().fit_transform(X_pca), X_pca, cumvar, n_comp
 
 
 def _distances_to_centroids(X: np.ndarray, centroids: np.ndarray) -> np.ndarray:
@@ -301,15 +306,35 @@ def run_gmm(
     return sel
 
 
+def _project_hdbscan_2d(
+    X_pca_unscaled: np.ndarray,
+    cumvar: float,
+    n_comp: int,
+) -> tuple[np.ndarray, float]:
+    """Take the leading 2 PCA axes (variance-ordered), not a second PCA on scaled coords."""
+    d = X_pca_unscaled.shape[1]
+    n_take = min(2, d)
+    X_2d = np.ascontiguousarray(X_pca_unscaled[:, :n_take])
+    # Approximate share of original retained PCA variance in the first 2 components.
+    # pca_reduce keeps components ordered by eigenvalue; with equalized scaling this would be ~2/d.
+    # On unscaled PCA scores, leading axes dominate — estimate via column variance share.
+    col_var = np.var(X_pca_unscaled, axis=0)
+    total = float(np.sum(col_var))
+    var_2d = float(np.sum(col_var[:n_take]) / total) if total > 0 else 0.0
+    var_2d_of_original = var_2d * float(cumvar) if n_comp > 0 else var_2d
+    return X_2d, var_2d_of_original
+
+
 def run_hdbscan(
     cfg: AnalysisConfig,
     track: FeatureTrack,
     track_root: Path,
     ids: list[str],
     grid_map: dict[str, np.ndarray],
-    X_pca: np.ndarray,
+    X_pca_unscaled: np.ndarray,
     path_map: dict[str, str],
     cumvar: float,
+    n_comp: int,
 ) -> dict:
     try:
         import hdbscan
@@ -321,20 +346,43 @@ def run_hdbscan(
     n_close = cfg.clustering.closest_samples
     cmap = cfg.report.colormap
 
-    clusterer = hdbscan.HDBSCAN(min_cluster_size=max(30, len(ids) // 100), min_samples=10, prediction_data=True)
-    labels = clusterer.fit_predict(X_pca)
+    # Use top-2 unscaled PCA components (keeps real variance); avoid StandardScaler→PCA2D.
+    X_2d, var_2d = _project_hdbscan_2d(X_pca_unscaled, cumvar, n_comp)
+    logger.info(
+        "[%s] HDBSCAN input: %d samples × %d-D PCA → top-2 (≈%.1f%% of original feature var)",
+        track.name,
+        len(ids),
+        X_pca_unscaled.shape[1],
+        100.0 * var_2d,
+    )
+
+    clusterer = hdbscan.HDBSCAN(
+        min_cluster_size=max(30, len(ids) // 100),
+        min_samples=10,
+        prediction_data=True,
+        core_dist_n_jobs=-1,
+    )
+    labels = clusterer.fit_predict(X_2d)
 
     n_clusters = len({u for u in labels if u >= 0})
     n_noise = int(np.sum(labels == -1))
     noise_ratio = n_noise / max(len(ids), 1)
 
-    label_df = pd.DataFrame({"image_id": ids, "cluster": labels})
+    label_df = pd.DataFrame(
+        {
+            "image_id": ids,
+            "cluster": labels,
+            "emb_x": X_2d[:, 0],
+            "emb_y": X_2d[:, 1] if X_2d.shape[1] > 1 else 0.0,
+        }
+    )
     if clusterer.probabilities_ is not None:
         label_df["membership_strength"] = clusterer.probabilities_
     label_df.to_csv(out / "cluster_labels.csv", index=False)
+    np.save(out / "embedding_2d.npy", X_2d.astype(np.float32))
 
     noise_ids = [ids[i] for i, lb in enumerate(labels) if lb == -1]
-    _export_samples(noise_ids[:50], out / "noise_samples", path_map, grid_map, cfg, "noise")
+    _export_samples(noise_ids[:n_close], out / "noise_samples", path_map, grid_map, cfg, "noise")
 
     all_centers: list[np.ndarray] = []
     for cid in sorted({u for u in labels if u >= 0}):
@@ -344,7 +392,7 @@ def run_hdbscan(
         cdir = ensure_dir(out / f"cluster_{cid:02d}")
         np.savez_compressed(cdir / "stats.npz", mean_feature=mean_feat, n_samples=len(cids))
         (cdir / "n_samples.txt").write_text(str(len(cids)), encoding="utf-8")
-        sub = X_pca[[i for i, lb in enumerate(labels) if lb == cid]]
+        sub = X_2d[[i for i, lb in enumerate(labels) if lb == cid]]
         dists = np.linalg.norm(sub - sub.mean(axis=0), axis=1)
         repr_ids = [cids[i] for i in np.argsort(dists)[:n_close]]
         _export_samples(repr_ids, cdir / "representative", path_map, grid_map, cfg, "representative")
@@ -360,6 +408,10 @@ def run_hdbscan(
         "noise_ratio": noise_ratio,
         "n_samples": len(ids),
         "pca_variance": cumvar,
+        "hdbscan_dims": int(X_2d.shape[1]),
+        "embedding_2d_variance": var_2d,
+        "prior_pca_dims": int(X_pca_unscaled.shape[1]),
+        "embedding": "top2_unscaled_pca",
     }
     save_json(out / "summary.json", summary)
     logger.info("[%s] HDBSCAN: %d clusters, %d noise (%.1f%%)", track.name, n_clusters, n_noise, 100 * noise_ratio)
@@ -417,7 +469,7 @@ def write_study_report(cfg: AnalysisConfig, root: Path, evaluations: list[dict])
         "1. 读取灰度图 → [可选]模板对齐 → 全图提取笔迹 mask",
         f"2. 生成 {gs}×{gs} `d_abs` → `d_abs_smooth`（墨迹密度）/ `d_rel_smooth`（空间分布）",
         f"3. 分别展开为 {gs*gs} 维 → PCA 保留 {cfg.clustering.pca_variance:.0%} 方差",
-        "4. 各特征轨分别运行 K-means / GMM / HDBSCAN",
+        "4. K-means / GMM 用标准化后的 PCA 坐标；HDBSCAN 用未标准化的前 2 个 PCA 分量",
         "5. 评价聚类结果 → 输出类中心热力图与代表原图",
         "",
         "## 特征轨",
@@ -434,6 +486,7 @@ def write_study_report(cfg: AnalysisConfig, root: Path, evaluations: list[dict])
         "- 输出 AIC/BIC、后验概率、过渡样本",
         "",
         "## HDBSCAN",
+        "- 使用方差有序的前 2 个 PCA 分量（避免对已标准化 PCA 再降维导致信息丢失）",
         "- 自动发现类别数；大量噪声提示连续分布",
         "",
         "## 评价摘要",
@@ -492,7 +545,7 @@ def run_cluster_study(
         (TRACKS[1], rel_map, X_rel),
     ]:
         track_root = ensure_dir(root / track.name)
-        X_pca, cumvar, n_comp = fit_pca(cfg, X_raw)
+        X_pca, X_pca_unscaled, cumvar, n_comp = fit_pca(cfg, X_raw)
         save_json(track_root / "pca.json", {"cumvar": cumvar, "n_components": n_comp, "n_samples": len(ids)})
 
         km_df = pd.DataFrame()
@@ -504,7 +557,9 @@ def run_cluster_study(
         if "G" in run_set:
             gmm_df = run_gmm(cfg, track, track_root, ids, grid_map, X_pca, path_map, cumvar)
         if "M" in run_set:
-            hdb_sum = run_hdbscan(cfg, track, track_root, ids, grid_map, X_pca, path_map, cumvar)
+            hdb_sum = run_hdbscan(
+                cfg, track, track_root, ids, grid_map, X_pca_unscaled, path_map, cumvar, n_comp
+            )
 
         evaluations.append(evaluate_track(track, track_root, km_df, gmm_df, hdb_sum))
 

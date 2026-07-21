@@ -12,6 +12,7 @@ from .build_report import build_report
 from .config import load_config
 from .inspect_model import run_introspection
 from .parse_layout import run_parse_layout
+from .parse_ocr_quality import run_parse_ocr_quality
 from .parse_recognition import run_parse_recognition
 from .plot_features import run_plots
 from .vllm_ocr_runner import run_benchmark, run_vllm_ocr
@@ -25,6 +26,7 @@ def run_pipeline(cfg: dict[str, Any]) -> None:
         "benchmark",
         "vllm_ocr",
         "parse_layout",
+        "parse_ocr_quality",
         "parse_recognition",
         "visual_features",
         "analyze",
@@ -34,9 +36,14 @@ def run_pipeline(cfg: dict[str, Any]) -> None:
     mapping: dict[str, Callable[[], Any]] = {
         "inspect_model": lambda: run_introspection(cfg),
         "build_manifest": lambda: build_manifest(cfg),
-        "benchmark": lambda: run_benchmark(cfg),
+        "benchmark": lambda: (
+            None
+            if not cfg.get("benchmark", {}).get("enabled", True)
+            else run_benchmark(cfg)
+        ),
         "vllm_ocr": lambda: run_vllm_ocr(cfg),
         "parse_layout": lambda: run_parse_layout(cfg),
+        "parse_ocr_quality": lambda: run_parse_ocr_quality(cfg),
         "parse_recognition": lambda: run_parse_recognition(cfg),
         "visual_features": lambda: run_visual_features(cfg),
         "analyze": lambda: analyze_all(cfg),

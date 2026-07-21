@@ -358,8 +358,21 @@ def run_clustering(cfg: AnalysisConfig) -> dict:
                 try:
                     import hdbscan
 
-                    cluster_model = hdbscan.HDBSCAN(min_cluster_size=max(5, n // 20))
-                    labels = cluster_model.fit_predict(X_pca)
+                    # Prefer variance-ordered leading PCA axes. If X_pca was already
+                    # StandardScaled (equalized), re-PCA from those coords is near-isotropic —
+                    # still take [:, :2] as best available without a separate unscaled matrix.
+                    X_hdb = X_pca[:, : min(2, X_pca.shape[1])]
+                    logger.info(
+                        "HDBSCAN group %s: using top-%d PCA coords (of %d)",
+                        tmpl_key,
+                        X_hdb.shape[1],
+                        X_pca.shape[1],
+                    )
+                    cluster_model = hdbscan.HDBSCAN(
+                        min_cluster_size=max(5, n // 20),
+                        core_dist_n_jobs=-1,
+                    )
+                    labels = cluster_model.fit_predict(X_hdb)
                     k = len(set(labels)) - (1 if -1 in labels else 0)
                 except ImportError:
                     logger.warning("hdbscan not installed, falling back to kmeans")
