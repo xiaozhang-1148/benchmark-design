@@ -1,51 +1,41 @@
-# DeepSeek-OCR-2 Feature Extraction & Distribution Analysis
+# DeepSeek-OCR2 Visual Embedding Experiment
 
-四通道：视觉 / 布局 / 识别内容 / OCR 质量（质量只过滤，不进 PCA）。不做聚类与特征融合。
+**方法**：DeepSeek-OCR2 mean-pooled projected-token embedding  
+`SAM → Qwen2 → MLP Projector → mean pool → L2`
 
-## Runtime
+不做：OCR 文本生成、GT、布局解析、train/val/test 划分。
+
+## 运行
 
 ```bash
 cd /home/baoquan/benchmark/benchmark-design
-uv sync --extra deepseek --extra analysis   # analysis 含 umap-learn（plot 硬依赖）
-# OCR 另需: uv pip install "vllm==0.19.0"
+uv sync --extra deepseek --extra analysis
 export HF_HOME=/mnt/nvme_model/baoquan/.cache/huggingface
-export HF_ENDPOINT=https://hf-mirror.com
+
+# 1) 接口验证（约 50 张）
+uv run -m src.pipeline --config configs/experiment/run_config.yaml --stages verify
+
+# 2) Smoke（约 800 张：提取 + 诊断 + PCA/UMAP）
+uv run -m src.pipeline --config configs/experiment/run_config.yaml --stages smoke
+
+# 3) 全量提取
+uv run -m src.pipeline --config configs/experiment/run_config.yaml --stages manifest extract
+
+# 4) 全量分析与聚类
+uv run -m src.pipeline --config configs/experiment/run_config.yaml --stages analyze
 ```
 
-## Commands
+## 输出
 
-```bash
-# 全量重跑 + 多卡数据并行（resume=false 会清空 OCR/视觉缓存）
-uv run -m src.pipeline --config configs/full_gpu.yaml
-
-# 从已有 OCR 重解析特征（CPU，无需 GPU）
-uv run -m src.pipeline --config configs/default.yaml \
-  --stages parse_layout parse_ocr_quality parse_recognition analyze plot report
-```
-
-## Outputs
-
-Default root: `/home/baoquan/benchmark/deepseek`
+`/home/baoquan/benchmark/deepseek/experiment/`
 
 ```
-deepseek/
-  outputs/
-    manifest.parquet
-    ocr_generations.parquet
-    ocr_quality.parquet          # quality channel
-    recognition_features.parquet # content only
-    layout_features.parquet
-    visual_embeddings.f32.mmap
-    analysis/
-  reports/
-    quality_gates.json
-    feature_analysis.md
-    figures/
+config/run_config.yaml
+metadata/manifest.parquet
+embeddings/deepseek_ocr2_mean_l2.npy
+diagnostics/
+projections/
+clustering/
+galleries/
+report/visual_embedding_analysis.html
 ```
-
-## Architecture
-
-- **Channel A (vLLM)**: OCR / Markdown / grounding
-- **Channel B (Transformers)**: fixed visual-layer pooled embedding
-- **OCR quality**: truncated / repetitive / empty / parse_failed — filter only
-- Align by `image_id`

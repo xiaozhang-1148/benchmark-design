@@ -1,0 +1,58 @@
+# DeepSeek-OCR2 mean-pooled projected-token embedding
+# Method: SAM → Qwen2 visual encoder → MLP Projector → masked mean pool → L2
+# No OCR text generation, no GT, no layout parsing.
+
+method_name: "DeepSeek-OCR2 mean-pooled projected-token embedding"
+
+model:
+  name_or_path: "deepseek-ai/DeepSeek-OCR-2"
+  local_path: "/mnt/nvme_model/baoquan/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-OCR-2/snapshots/aaa02f3811945a91062062994c5c4a3f4c0af2b0"
+  revision: "aaa02f3811945a91062062994c5c4a3f4c0af2b0"
+  dtype: "bfloat16"
+  attn_implementation: "eager"
+
+preprocess:
+  base_size: 1024
+  image_size: 768
+  crop_mode: true
+
+pooling: "masked_mean"
+normalization: "l2"
+exclude_view_separator: true
+random_seed: 42
+
+data:
+  input_dir: "/mnt/nvme_user/baoquan/Label_Data/images_folder"
+  image_extensions: [".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"]
+  recursive: true
+
+paths:
+  experiment_root: "/home/baoquan/benchmark/deepseek/experiment"
+
+extract:
+  data_parallel_size: auto
+  resume: true
+  # batch by similar patch counts when possible; first version is per-image
+  save_name: "deepseek_ocr2_mean_l2.npy"
+
+stages:
+  verify_n: 50
+  smoke_n: 800
+  determinism_n: 30
+
+analysis:
+  knn_k: 8
+  umap_n_neighbors: 15
+  umap_min_dist: 0.1
+  umap_random_state: 42
+  pca_n_components: 50
+  figure_dpi: 150
+  similarity_sample: 2000
+  kmeans_k_min: 2
+  kmeans_k_max: 20
+  kmeans_n_init_seeds: 10
+  kmeans_bootstrap: 5
+  hdbscan_pca_dim: 50
+  hdbscan_min_cluster_size_frac: 0.005
+  hdbscan_min_cluster_size_floor: 20
+  gallery_n: 16

@@ -1,4 +1,4 @@
-# Smoke / correctness run (10 images). Copy of default with limits.
+# Smoke: visual embedding only (10 images).
 seed: 42
 
 model:
@@ -19,32 +19,7 @@ data:
 paths:
   output_root: "/home/baoquan/benchmark/deepseek"
   reports_dir: null
-
-prompt: "<image>\n<|grounding|>Convert the document to markdown."
-
-vllm:
-  enabled: false
-  dtype: "bfloat16"
-  temperature: 0.0
-  top_p: 1.0
-  max_tokens: 2048
-  max_model_len: 8192
-  tensor_parallel_size: 1
-  gpu_memory_utilization: 0.85
-  max_num_seqs: 4
-  enforce_eager: false
-  trust_remote_code: true
-  hf_overrides:
-    architectures: ["DeepseekOCR2ForCausalLM"]
-  ngram_size: 20
-  ngram_window_size: 90
-  ngram_whitelist_token_ids: [128821, 128822]
-  enable_prefix_caching: false
-  quantization: null
-  retry_max: 3
-  retry_backoff_sec: 2.0
-  prefetch_workers: 4
-  decode_workers: 4
+  reports_v2_dir: null
 
 visual:
   batch_size: 1
@@ -54,17 +29,11 @@ visual:
   device: "cuda"
   pool_causal_flow_only: true
   use_sam_middle_layer: false
+  data_parallel_size: 1
 
-recognition:
-  extract_decoder_embedding: false
-
-benchmark:
-  enabled: false
-  sample_size: 8
-  max_num_seqs_candidates: [2, 4]
-  gpu_memory_utilization_candidates: [0.80, 0.85]
-  prefetch_workers_candidates: [4]
-  skip_if_exists: false
+embedding_quality:
+  norm_min: 1.0e-6
+  norm_max: 1.0e6
 
 analysis:
   knn_k: 15
@@ -81,10 +50,8 @@ pipeline:
   stages:
     - inspect_model
     - build_manifest
-    # smoke: visual channel only (fast). Full OCR: use configs/default.yaml + uv sync --extra deepseek
     - visual_features
-    - analyze
-    - plot
-    - report
+    - embedding_quality
+    - analysis_v2
   resume: true
   limit: 10

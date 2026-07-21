@@ -1,22 +1,17 @@
-# DeepSeek-OCR-2 feature extraction & distribution analysis
+# DeepSeek-OCR-2 visual embedding extraction & distribution analysis
 # Env: uv sync --extra deepseek --extra analysis
-# vLLM OCR (Channel A): install vllm separately after sync (e.g. uv pip install "vllm==0.19.0")
+# Visual-only: no vLLM OCR text, no grounding layout, no OCR quality channel.
 
 seed: 42
 
 model:
   name_or_path: "deepseek-ai/DeepSeek-OCR-2"
-  # Local snapshot preferred when available
   local_path: "/mnt/nvme_model/baoquan/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-OCR-2/snapshots/aaa02f3811945a91062062994c5c4a3f4c0af2b0"
   revision: "aaa02f3811945a91062062994c5c4a3f4c0af2b0"
   trust_remote_code: true
   dtype: "bfloat16"
-  # Visual encoder: qwen2_model (causal-flow). Layer index is 0-based into transformer layers.
-  # Default = floor(num_layers / 2); overridden after introspection if null.
   visual_encoder: "qwen2_model"
   selected_layer: null
-  # Language backbone: eager (remote DeepseekOCR2 does not declare SDPA support).
-  # Qwen2 visual encoder still uses its own SDPA path internally.
   attn_implementation: "eager"
 
 data:
@@ -27,69 +22,21 @@ data:
 paths:
   output_root: "/home/baoquan/benchmark/deepseek"
   reports_dir: null  # default: {output_root}/reports
-
-prompt: "<image>\n<|grounding|>Convert the document to markdown."
-
-vllm:
-  enabled: true
-  dtype: "bfloat16"
-  temperature: 0.0
-  top_p: 1.0
-  max_tokens: 4096
-  max_model_len: 8192
-  # OCR-2 fits one A10 (~6GB). Use data parallel across GPUs, NOT tensor parallel.
-  tensor_parallel_size: 1
-  data_parallel_size: auto   # auto = all visible GPUs (16); or set e.g. 8
-  gpu_memory_utilization: 0.90
-  max_num_seqs: 16  # per-GPU concurrency; override via benchmark best_config if present
-  enforce_eager: false
-  trust_remote_code: true
-  hf_overrides:
-    architectures: ["DeepseekOCR2ForCausalLM"]
-  # Optional ngram logits processor (DeepSeek official recipe)
-  ngram_size: 20
-  ngram_window_size: 90
-  ngram_whitelist_token_ids: [128821, 128822]
-  enable_prefix_caching: false
-  quantization: null
-  retry_max: 3
-  retry_backoff_sec: 2.0
-  request_timeout_sec: 600
-  # Async image IO (per worker)
-  prefetch_workers: 8
-  decode_workers: 8
+  reports_v2_dir: null  # default: {output_root}/reports_v2
 
 visual:
-  # Channel B: Transformers BF16 extraction only (no long generation)
   batch_size: 1
   crop_mode: true
   base_size: 1024
   image_size: 768
   device: "cuda"
-  # Pool only causal-flow query tokens from selected qwen2 layer
   pool_causal_flow_only: true
-  # If true, also average SAM global-view features at middle SAM layer (not default)
   use_sam_middle_layer: false
-  data_parallel_size: auto   # auto = all visible GPUs
+  data_parallel_size: auto
 
-recognition:
-  extract_decoder_embedding: false  # content stats only; no text embedding
-
-# OCR quality channel — filter/diagnostics only (never enters recognition PCA)
-ocr_quality:
-  repetition_ratio_threshold: 0.35
-  catastrophic_ngram_repeat: 20
-  invalid_char_rate_threshold: 0.05
-  extreme_line_count: 400
-  extreme_formula_count: 80
-
-benchmark:
-  enabled: true
-  sample_size: 100
-  max_num_seqs_candidates: [4, 8, 16, 32]
-  gpu_memory_utilization_candidates: [0.75, 0.85, 0.90]
-  prefetch_workers_candidates: [4, 8]
-  skip_if_exists: true
+embedding_quality:
+  norm_min: 1.0e-6
+  norm_max: 1.0e6
 
 analysis:
   knn_k: 15
@@ -106,14 +53,8 @@ pipeline:
   stages:
     - inspect_model
     - build_manifest
-    - benchmark
-    - vllm_ocr
-    - parse_layout
-    - parse_ocr_quality
-    - parse_recognition
     - visual_features
-    - analyze
-    - plot
-    - report
+    - embedding_quality
+    - analysis_v2
   resume: true
-  limit: null  # set e.g. 10 for smoke tests
+  limit: null

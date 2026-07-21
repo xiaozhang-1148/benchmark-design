@@ -1,8 +1,6 @@
-# Full re-run on all visible GPUs (data parallel for OCR + visual).
+# Full visual-embedding re-run on all GPUs (no OCR).
 # Usage:
 #   uv run -m src.pipeline --config configs/full_gpu.yaml
-#
-# Clears OCR/visual caches via resume:false; uses all GPUs (data_parallel_size: auto).
 
 seed: 42
 
@@ -24,34 +22,7 @@ data:
 paths:
   output_root: "/home/baoquan/benchmark/deepseek"
   reports_dir: null
-
-prompt: "<image>\n<|grounding|>Convert the document to markdown."
-
-vllm:
-  enabled: true
-  dtype: "bfloat16"
-  temperature: 0.0
-  top_p: 1.0
-  max_tokens: 4096
-  max_model_len: 8192
-  tensor_parallel_size: 1
-  data_parallel_size: auto
-  gpu_memory_utilization: 0.90
-  max_num_seqs: 16
-  enforce_eager: false
-  trust_remote_code: true
-  hf_overrides:
-    architectures: ["DeepseekOCR2ForCausalLM"]
-  ngram_size: 20
-  ngram_window_size: 90
-  ngram_whitelist_token_ids: [128821, 128822]
-  enable_prefix_caching: false
-  quantization: null
-  retry_max: 3
-  retry_backoff_sec: 2.0
-  request_timeout_sec: 600
-  prefetch_workers: 8
-  decode_workers: 8
+  reports_v2_dir: null
 
 visual:
   batch_size: 1
@@ -63,25 +34,9 @@ visual:
   use_sam_middle_layer: false
   data_parallel_size: auto
 
-recognition:
-  extract_decoder_embedding: false
-
-ocr_quality:
-  repetition_ratio_threshold: 0.35
-  catastrophic_ngram_repeat: 20
-  invalid_char_rate_threshold: 0.05
-  extreme_line_count: 400
-  extreme_formula_count: 80
-
-# Skip auto-tuning; full_gpu.yaml already sets max_num_seqs / gpu_memory_utilization.
-# Still requires: uv pip install "vllm==0.19.0" in this project's .venv for vllm_ocr.
-benchmark:
-  enabled: false
-  sample_size: 100
-  max_num_seqs_candidates: [8, 16]
-  gpu_memory_utilization_candidates: [0.90]
-  prefetch_workers_candidates: [8]
-  skip_if_exists: true
+embedding_quality:
+  norm_min: 1.0e-6
+  norm_max: 1.0e6
 
 analysis:
   knn_k: 15
@@ -98,14 +53,8 @@ pipeline:
   stages:
     - inspect_model
     - build_manifest
-    # benchmark skipped (enabled:false); needs vllm — install once, then optional
-    - vllm_ocr
-    - parse_layout
-    - parse_ocr_quality
-    - parse_recognition
     - visual_features
-    - analyze
-    - plot
-    - report
+    - embedding_quality
+    - analysis_v2
   resume: false
   limit: null

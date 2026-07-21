@@ -39,6 +39,7 @@ analysis = [
     "umap-learn>=0.5.7",
     "numba>=0.60.0",
     "llvmlite>=0.43.0",
+    "hdbscan>=0.8.38",
 ]
 
 # DeepSeek-OCR-2 (https://github.com/deepseek-ai/DeepSeek-OCR-2)

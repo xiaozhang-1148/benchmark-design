@@ -338,13 +338,7 @@ def run_visual_features(cfg: dict[str, Any]) -> pd.DataFrame:
     man = man[man["status"] != "corrupt"].copy()
     fp = fingerprint_config(cfg)
 
-    # Prefer images that already have OCR ok, else all
-    ocr_path = out_dir / "ocr_generations.parquet"
-    if ocr_path.exists():
-        ocr = pd.read_parquet(ocr_path)
-        ok_ids = set(ocr.loc[ocr["status"] == "ok", "image_id"].astype(str))
-        if ok_ids:
-            man = man[man["image_id"].astype(str).isin(ok_ids)]
+    # Visual-only pipeline: embed all readable images (do not gate on OCR).
 
     # Load introspection for selected layer
     intro = Path(cfg["paths"]["reports_dir"]) / "model_introspection.json"
