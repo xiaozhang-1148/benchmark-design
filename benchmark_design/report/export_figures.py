@@ -24,8 +24,9 @@ _MATPLOTLIB_CONFIGURED = False
 BIN_DISPLAY_LABELS: tuple[str, ...] = ("1-10", "11-20", "21-40", "41-80", ">80")
 
 CATEGORY_COLORS: dict[TokenCategory, str] = {
-    TokenCategory.LATIN_VARIABLE: "#4472C4",
+    TokenCategory.ENGLISH: "#4472C4",
     TokenCategory.DIGIT: "#70AD47",
+    TokenCategory.GREEK: "#996633",
     TokenCategory.SPECIAL_SYMBOL: "#FFC000",
     TokenCategory.OPERATOR: "#ED7D31",
     TokenCategory.GROUPING: "#5B9BD5",

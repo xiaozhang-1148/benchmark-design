@@ -11,8 +11,6 @@ import pandas as pd
 
 from benchmark_design.page_level_latex.expression_latex_metrics import ExpressionLatexMetricsRow
 from benchmark_design.page_level_latex.latex_protocol import (
-    LENGTH_BIN_FIELD_KEYS,
-    LENGTH_BIN_KEY_TO_DISPLAY,
     STRUCTURE_TYPE_ORDER,
     TAXONOMY_CATEGORY_TO_FIELD,
     TOKEN_CATEGORY_ORDER,
@@ -39,86 +37,38 @@ def write_protocol_audit(audit: dict[str, int | float], output_path: Path) -> Pa
     return output_path
 
 
-def write_scale_summary(page_rows: Sequence[PageLatexMetricsRow], output_path: Path) -> Path:
-    expr = np.array([row.expression_count for row in page_rows], dtype=np.float64)
-    tokens = np.array([row.total_token_count for row in page_rows], dtype=np.float64)
-    longest = np.array([row.max_expression_token_count for row in page_rows], dtype=np.float64)
-    expr_stats = _quantile_stats(expr)
-    token_stats = _quantile_stats(tokens)
-    longest_stats = _quantile_stats(longest)
+def write_ast_page_summary(page_rows: Sequence[PageLatexMetricsRow], output_path: Path) -> Path:
+    trees = np.array([row.ast_tree_count for row in page_rows], dtype=np.float64)
+    nodes = np.array([row.total_ast_node_count for row in page_rows], dtype=np.float64)
+    depths = np.array([row.max_ast_depth for row in page_rows], dtype=np.float64)
+    tree_stats = _quantile_stats(trees)
+    node_stats = _quantile_stats(nodes)
+    depth_stats = _quantile_stats(depths)
     frame = pd.DataFrame(
         [
             {
-                "metric": "expressions_per_page",
-                "total": int(expr.sum()) if expr.size else 0,
-                "mean": expr_stats["mean"],
-                "median": expr_stats["median"],
-                "max": expr_stats["max"],
+                "metric": "ast_tree_count",
+                "total": int(trees.sum()) if trees.size else 0,
+                "mean": tree_stats["mean"],
+                "median": tree_stats["median"],
+                "max": tree_stats["max"],
             },
             {
-                "metric": "tokens_per_page",
-                "total": int(tokens.sum()) if tokens.size else 0,
-                "mean": token_stats["mean"],
-                "median": token_stats["median"],
-                "max": token_stats["max"],
+                "metric": "total_ast_node_count",
+                "total": int(nodes.sum()) if nodes.size else 0,
+                "mean": node_stats["mean"],
+                "median": node_stats["median"],
+                "max": node_stats["max"],
             },
             {
-                "metric": "max_expression_token_count_per_page",
+                "metric": "max_ast_depth",
                 "total": "",
-                "mean": longest_stats["mean"],
-                "median": longest_stats["median"],
-                "max": longest_stats["max"],
+                "mean": depth_stats["mean"],
+                "median": depth_stats["median"],
+                "max": depth_stats["max"],
             },
         ]
     )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output_path, index=False)
-    return output_path
-
-
-def write_length_coverage(
-    expression_rows: Sequence[ExpressionLatexMetricsRow],
-    page_rows: Sequence[PageLatexMetricsRow],
-    output_path: Path,
-) -> Path:
-    valid = [row for row in expression_rows if row.valid_for_latex]
-    total_expr = len(valid)
-    total_pages = len(page_rows)
-    expr_counts = Counter(row.length_bin_key for row in valid)
-    records = []
-    for key in LENGTH_BIN_FIELD_KEYS:
-        expr_count = expr_counts.get(key, 0)
-        page_cover = sum(1 for page in page_rows if getattr(page, f"{key}_count") > 0)
-        records.append(
-            {
-                "length_bin": LENGTH_BIN_KEY_TO_DISPLAY[key],
-                "expression_count": expr_count,
-                "expression_ratio": expr_count / total_expr if total_expr else 0.0,
-                "page_count": page_cover,
-                "page_ratio": page_cover / total_pages if total_pages else 0.0,
-            }
-        )
-    gt40_pages = sum(1 for page in page_rows if page.length_41_80_count + page.length_gt80_count > 0)
-    gt80_pages = sum(1 for page in page_rows if page.length_gt80_count > 0)
-    records.append(
-        {
-            "length_bin": "pages_with_>40",
-            "expression_count": "",
-            "expression_ratio": "",
-            "page_count": gt40_pages,
-            "page_ratio": gt40_pages / total_pages if total_pages else 0.0,
-        }
-    )
-    records.append(
-        {
-            "length_bin": "pages_with_>80",
-            "expression_count": "",
-            "expression_ratio": "",
-            "page_count": gt80_pages,
-            "page_ratio": gt80_pages / total_pages if total_pages else 0.0,
-        }
-    )
-    frame = pd.DataFrame(records)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(output_path, index=False)
     return output_path
@@ -133,11 +83,14 @@ def write_ast_depth_coverage(
     total_expr = len(valid)
     total_pages = len(page_rows)
     expr_counts = Counter(row.ast_depth for row in valid if row.ast_depth <= 5)
-    max_depth_page_counts = Counter(page.max_expression_ast_depth for page in page_rows)
+    max_depth_page_counts = Counter(page.max_ast_depth for page in page_rows)
+    depths_by_page: dict[str, set[int]] = defaultdict(set)
+    for row in valid:
+        depths_by_page[row.image_id].add(row.ast_depth)
     records = []
     for depth in range(0, 6):
         expr_count = expr_counts.get(depth, 0)
-        page_cover = sum(1 for page in page_rows if getattr(page, f"ast_depth_{depth}_count") > 0)
+        page_cover = sum(1 for page in page_rows if depth in depths_by_page.get(page.image_id, set()))
         records.append(
             {
                 "ast_depth": depth,
@@ -303,37 +256,6 @@ def write_rare10_token_detail(
                 "page_ratio": len(page_cover[token]) / total_pages if total_pages else 0.0,
             }
             for token in sorted(rare_tokens, key=lambda item: (token_counter[item], item))
-        ]
-    )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output_path, index=False)
-    return output_path
-
-
-def write_max_length_distribution(page_rows: Sequence[PageLatexMetricsRow], output_path: Path) -> Path:
-    total_pages = len(page_rows)
-    counts = Counter()
-    for page in page_rows:
-        max_tokens = page.max_expression_token_count
-        if max_tokens <= 10:
-            key = "length_1_10"
-        elif max_tokens <= 20:
-            key = "length_11_20"
-        elif max_tokens <= 40:
-            key = "length_21_40"
-        elif max_tokens <= 80:
-            key = "length_41_80"
-        else:
-            key = "length_gt80"
-        counts[key] += 1
-    frame = pd.DataFrame(
-        [
-            {
-                "length_bin": LENGTH_BIN_KEY_TO_DISPLAY[key],
-                "page_count": counts.get(key, 0),
-                "page_ratio": counts.get(key, 0) / total_pages if total_pages else 0.0,
-            }
-            for key in LENGTH_BIN_FIELD_KEYS
         ]
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)

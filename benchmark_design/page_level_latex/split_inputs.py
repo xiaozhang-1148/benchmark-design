@@ -193,10 +193,9 @@ def build_page_hmer_features(
         depths = depth_presence.get(page.image_id, {})
         record = {
             "page_id": page.image_id,
-            "expression_count": page.expression_count,
-            "page_token_count": page.total_token_count,
-            "max_expression_token_count": page.max_expression_token_count,
-            "max_ast_depth": page.max_expression_ast_depth,
+            "ast_tree_count": page.ast_tree_count,
+            "total_ast_node_count": page.total_ast_node_count,
+            "max_ast_depth": page.max_ast_depth,
             **structure,
             "has_rare8": has_rare8,
             "rare8_token_count": rare8_count,
@@ -313,8 +312,8 @@ def prepare_split_inputs(
         raise ValueError("manifest and features page_id sets differ")
     token_pages = set(tokens_df["page_id"]) if not tokens_df.empty else set()
     empty_pages = set(manifest_df["page_id"]) - token_pages
-    # Empty OCR pages are allowed only if expression_count == 0.
-    zero_expr = set(features_df.loc[features_df["expression_count"] == 0, "page_id"])
+    # Empty OCR pages are allowed only if ast_tree_count == 0.
+    zero_expr = set(features_df.loc[features_df["ast_tree_count"] == 0, "page_id"])
     unexpected_empty = empty_pages - zero_expr
     if unexpected_empty:
         raise ValueError(f"pages with expressions but no token rows: {sorted(unexpected_empty)[:10]}")
@@ -333,7 +332,7 @@ def prepare_split_inputs(
         "dataset_version": version,
         "input_dir": str(input_dir.resolve()),
         "page_count": len(manifest_df),
-        "expression_count": int(features_df["expression_count"].sum()),
+        "ast_tree_count": int(features_df["ast_tree_count"].sum()),
         "token_instance_count": int(tokens_df["count"].sum()) if not tokens_df.empty else 0,
         "metrics_source": (
             str(page_level_latex_output.resolve())

@@ -12,7 +12,6 @@ from benchmark_design.page_level_latex.page_latex_metrics import PageLatexMetric
 from benchmark_design.page_level_latex.plot_data import (
     FIG6_1_BIN_SPECS,
     build_fig6_1_plot_data,
-    build_fig6_2_plot_data,
     build_fig6_3_plot_data,
     build_fig6_4_plot_data,
     build_fig6_5_joint_grouped,
@@ -72,9 +71,9 @@ def _save_fig6_1(
     plot_data = build_fig6_1_plot_data(page_rows)
     fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
     metrics = (
-        ("expression_count", "Expressions per page", COLOR_PAGE_COUNT),
-        ("total_token_count", "Tokens per page", COLOR_PAGE_COVERAGE),
-        ("max_expression_token_count", "Max expression tokens per page", COLOR_PAGE_MAX),
+        ("ast_tree_count", "AST trees per page", COLOR_PAGE_COUNT),
+        ("total_ast_node_count", "AST nodes per page", COLOR_PAGE_COVERAGE),
+        ("max_ast_depth", "Max AST depth per page", COLOR_PAGE_MAX),
     )
     for ax, (field, title, color) in zip(axes, metrics, strict=True):
         values = np.array([getattr(row, field) for row in page_rows], dtype=np.float64)
@@ -100,58 +99,7 @@ def _save_fig6_1(
         ax.tick_params(axis="x", rotation=20)
         enable_horizontal_grid_only(ax)
 
-    fig.suptitle("Figure 6-1 Page LaTeX content scale distribution")
-    fig.tight_layout()
-    return _finalize_figure(fig, figure_stem=figure_stem, csv_path=csv_path, plot_data=plot_data)
-
-
-@with_locked_pyplot
-def _save_fig6_2(
-    page_rows: Sequence[PageLatexMetricsRow],
-    figure_stem: Path,
-    csv_path: Path,
-) -> dict[str, Path]:
-    import matplotlib.pyplot as plt
-
-    apply_chapter6_style(plt)
-    plot_data = build_fig6_2_plot_data(page_rows)
-    labels = plot_data["length_bin"].tolist()
-    x = np.arange(len(labels))
-    width = 0.36
-    fig, ax = plt.subplots(figsize=(10, 5.2))
-    bars_cov = ax.bar(
-        x - width / 2,
-        plot_data["coverage_page_ratio"] * 100,
-        width,
-        label="Page coverage",
-        color=COLOR_PAGE_COVERAGE,
-    )
-    bars_max = ax.bar(
-        x + width / 2,
-        plot_data["max_length_page_ratio"] * 100,
-        width,
-        label="Max-expression length bin",
-        color=COLOR_PAGE_MAX,
-    )
-    annotate_bars_dual(
-        ax,
-        bars_cov,
-        plot_data["coverage_page_count"],
-        plot_data["coverage_page_ratio"],
-    )
-    annotate_bars_dual(
-        ax,
-        bars_max,
-        plot_data["max_length_page_count"],
-        plot_data["max_length_page_ratio"],
-    )
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.set_ylabel("Page ratio (%)")
-    ax.set_xlabel("Token length bin")
-    ax.set_title("Figure 6-2 Page coverage and max-expression length by token-length bin")
-    ax.legend(loc="upper right")
-    enable_horizontal_grid_only(ax)
+    fig.suptitle("Figure 6-1 Page AST scale distribution")
     fig.tight_layout()
     return _finalize_figure(fig, figure_stem=figure_stem, csv_path=csv_path, plot_data=plot_data)
 
@@ -188,6 +136,7 @@ def _grouped_depth_bars(ax, frame, depths: list[int], *, title: str) -> None:
 
 @with_locked_pyplot
 def _save_fig6_3(
+    expression_rows: Sequence[ExpressionLatexMetricsRow],
     page_rows: Sequence[PageLatexMetricsRow],
     figure_stem: Path,
     csv_path: Path,
@@ -195,7 +144,7 @@ def _save_fig6_3(
     import matplotlib.pyplot as plt
 
     apply_chapter6_style(plt)
-    plot_data = build_fig6_3_plot_data(page_rows)
+    plot_data = build_fig6_3_plot_data(expression_rows, page_rows)
     fig, ax = plt.subplots(figsize=(12, 5.2))
     _grouped_depth_bars(
         ax,
@@ -455,16 +404,17 @@ def export_page_latex_figures(
         outputs[f"{key}.csv"] = result["csv"]
 
     record(
-        "fig6_1_page_scale",
-        _save_fig6_1(page_rows, figures_dir / "fig6_1_page_scale", plot_data_dir / "fig6_1_page_scale_plot_data.csv"),
-    )
-    record(
-        "fig6_2_length_coverage",
-        _save_fig6_2(page_rows, figures_dir / "fig6_2_length_coverage", plot_data_dir / "fig6_2_page_length_distribution.csv"),
+        "fig6_1_page_ast_scale",
+        _save_fig6_1(page_rows, figures_dir / "fig6_1_page_ast_scale", plot_data_dir / "fig6_1_page_ast_scale_plot_data.csv"),
     )
     record(
         "fig6_3_ast_depth_coverage",
-        _save_fig6_3(page_rows, figures_dir / "fig6_3_ast_depth_coverage", plot_data_dir / "fig6_3_page_ast_depth_distribution.csv"),
+        _save_fig6_3(
+            expression_rows,
+            page_rows,
+            figures_dir / "fig6_3_ast_depth_coverage",
+            plot_data_dir / "fig6_3_page_ast_depth_distribution.csv",
+        ),
     )
     record(
         "fig6_4_structure_coverage",

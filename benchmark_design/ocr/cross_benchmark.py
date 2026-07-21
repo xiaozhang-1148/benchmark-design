@@ -113,8 +113,9 @@ class CrossBenchmarkProfile:
     count_gt_80_and_ast_ge_3: int
     total_token_count: int
     taxonomy_token_counts: tuple[int, ...]
-    latin_variable_token_ratio: float
+    english_token_ratio: float
     digit_token_ratio: float
+    greek_token_ratio: float
     special_symbol_token_ratio: float
     operator_token_ratio: float
     grouping_token_ratio: float
@@ -135,8 +136,9 @@ STRUCTURE_TYPE_COUNT_LABELS: tuple[str, ...] = (
 )
 
 CROSS_BENCHMARK_TAXONOMY_CATEGORIES: tuple[TokenCategory, ...] = (
-    TokenCategory.LATIN_VARIABLE,
+    TokenCategory.ENGLISH,
     TokenCategory.DIGIT,
+    TokenCategory.GREEK,
     TokenCategory.SPECIAL_SYMBOL,
     TokenCategory.OPERATOR,
     TokenCategory.GROUPING,
@@ -413,14 +415,15 @@ def build_cross_benchmark_profile(
         ),
         total_token_count=total_token_count,
         taxonomy_token_counts=taxonomy_counts,
-        latin_variable_token_ratio=taxonomy_shares[0],
+        english_token_ratio=taxonomy_shares[0],
         digit_token_ratio=taxonomy_shares[1],
-        special_symbol_token_ratio=taxonomy_shares[2],
-        operator_token_ratio=taxonomy_shares[3],
-        grouping_token_ratio=taxonomy_shares[4],
-        structural_token_ratio=taxonomy_shares[5],
-        cjk_token_ratio=taxonomy_shares[6],
-        other_unknown_token_ratio=taxonomy_shares[7],
+        greek_token_ratio=taxonomy_shares[2],
+        special_symbol_token_ratio=taxonomy_shares[3],
+        operator_token_ratio=taxonomy_shares[4],
+        grouping_token_ratio=taxonomy_shares[5],
+        structural_token_ratio=taxonomy_shares[6],
+        cjk_token_ratio=taxonomy_shares[7],
+        other_unknown_token_ratio=taxonomy_shares[8],
         notes=notes,
         structural_difficulty_counts=_structural_difficulty_count_bins(features),
     )

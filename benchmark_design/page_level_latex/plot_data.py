@@ -10,8 +10,6 @@ import pandas as pd
 
 from benchmark_design.page_level_latex.expression_latex_metrics import ExpressionLatexMetricsRow
 from benchmark_design.page_level_latex.latex_protocol import (
-    LENGTH_BIN_FIELD_KEYS,
-    LENGTH_BIN_KEY_TO_DISPLAY,
     STRUCTURE_TYPE_ORDER,
     TAXONOMY_CATEGORY_TO_FIELD,
     TOKEN_CATEGORY_ORDER,
@@ -27,7 +25,7 @@ def total_pages(page_rows: Sequence[PageLatexMetricsRow]) -> int:
 
 # Fixed intervals for Figure 6-1 (inclusive closed ranges; last bin is open-ended ">X").
 FIG6_1_BIN_SPECS: dict[str, tuple[tuple[int | None, int | None, str], ...]] = {
-    "expression_count": (
+    "ast_tree_count": (
         (1, 10, "1–10"),
         (11, 20, "11–20"),
         (21, 30, "21–30"),
@@ -35,7 +33,7 @@ FIG6_1_BIN_SPECS: dict[str, tuple[tuple[int | None, int | None, str], ...]] = {
         (41, 50, "41–50"),
         (51, None, ">50"),
     ),
-    "total_token_count": (
+    "total_ast_node_count": (
         (1, 200, "1–200"),
         (201, 400, "201–400"),
         (401, 600, "401–600"),
@@ -43,12 +41,14 @@ FIG6_1_BIN_SPECS: dict[str, tuple[tuple[int | None, int | None, str], ...]] = {
         (801, 1000, "801–1,000"),
         (1001, None, ">1,000"),
     ),
-    "max_expression_token_count": (
-        (1, 10, "1–10"),
-        (11, 20, "11–20"),
-        (21, 40, "21–40"),
-        (41, 80, "41–80"),
-        (81, None, ">80"),
+    "max_ast_depth": (
+        (0, 0, "0"),
+        (1, 1, "1"),
+        (2, 2, "2"),
+        (3, 3, "3"),
+        (4, 4, "4"),
+        (5, 5, "5"),
+        (6, None, ">5"),
     ),
 }
 
@@ -92,12 +92,9 @@ def build_fig6_1_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataF
     total = total_pages(page_rows)
     frames = []
     for metric, values in (
-        ("expression_count", np.array([row.expression_count for row in page_rows], dtype=np.float64)),
-        ("total_token_count", np.array([row.total_token_count for row in page_rows], dtype=np.float64)),
-        (
-            "max_expression_token_count",
-            np.array([row.max_expression_token_count for row in page_rows], dtype=np.float64),
-        ),
+        ("ast_tree_count", np.array([row.ast_tree_count for row in page_rows], dtype=np.float64)),
+        ("total_ast_node_count", np.array([row.total_ast_node_count for row in page_rows], dtype=np.float64)),
+        ("max_ast_depth", np.array([row.max_ast_depth for row in page_rows], dtype=np.float64)),
     ):
         frames.append(
             fixed_bin_frame(
@@ -110,43 +107,21 @@ def build_fig6_1_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataF
     return pd.concat(frames, ignore_index=True)
 
 
-def _max_length_bin(max_tokens: int) -> str:
-    if max_tokens <= 10:
-        return "length_1_10"
-    if max_tokens <= 20:
-        return "length_11_20"
-    if max_tokens <= 40:
-        return "length_21_40"
-    if max_tokens <= 80:
-        return "length_41_80"
-    return "length_gt80"
+def build_fig6_3_plot_data(
+    expression_rows: Sequence[ExpressionLatexMetricsRow],
+    page_rows: Sequence[PageLatexMetricsRow],
+) -> pd.DataFrame:
+    from collections import defaultdict
 
-
-def build_fig6_2_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
     total = total_pages(page_rows)
-    max_bin_counts = Counter(_max_length_bin(page.max_expression_token_count) for page in page_rows)
-    records = []
-    for key in LENGTH_BIN_FIELD_KEYS:
-        coverage = sum(1 for page in page_rows if getattr(page, f"{key}_count") > 0)
-        max_count = max_bin_counts.get(key, 0)
-        records.append(
-            {
-                "length_bin": LENGTH_BIN_KEY_TO_DISPLAY[key],
-                "coverage_page_count": coverage,
-                "coverage_page_ratio": page_ratio(coverage, total),
-                "max_length_page_count": max_count,
-                "max_length_page_ratio": page_ratio(max_count, total),
-            }
-        )
-    return pd.DataFrame(records)
-
-
-def build_fig6_3_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
-    total = total_pages(page_rows)
-    max_depth_counts = Counter(page.max_expression_ast_depth for page in page_rows)
+    valid = [row for row in expression_rows if row.valid_for_latex]
+    depths_by_page: dict[str, set[int]] = defaultdict(set)
+    for row in valid:
+        depths_by_page[row.image_id].add(row.ast_depth)
+    max_depth_counts = Counter(page.max_ast_depth for page in page_rows)
     records = []
     for depth in range(0, 6):
-        coverage = sum(1 for page in page_rows if getattr(page, f"ast_depth_{depth}_count") > 0)
+        coverage = sum(1 for page in page_rows if depth in depths_by_page.get(page.image_id, set()))
         max_count = max_depth_counts.get(depth, 0)
         records.append(
             {
@@ -202,7 +177,7 @@ def build_fig6_5_joint_exact(page_rows: Sequence[PageLatexMetricsRow]) -> pd.Dat
                 1
                 for page in page_rows
                 if page.distinct_structure_type_count == structure_count
-                and page.max_expression_ast_depth == depth
+                and page.max_ast_depth == depth
             )
             records.append(
                 {
@@ -224,7 +199,7 @@ def build_fig6_5_joint_grouped(page_rows: Sequence[PageLatexMetricsRow]) -> pd.D
                 1
                 for page in page_rows
                 if _structure_group(page.distinct_structure_type_count) == group
-                and page.max_expression_ast_depth == depth
+                and page.max_ast_depth == depth
             )
             records.append(
                 {

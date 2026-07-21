@@ -46,8 +46,9 @@ CONTENT_KIND_SUMMARY_LABELS: dict[ExpressionContentKind, str] = {
 }
 
 TAXONOMY_SUMMARY_LABELS: dict[TokenCategory, str] = {
-    TokenCategory.LATIN_VARIABLE: "Latin variable tokens",
+    TokenCategory.ENGLISH: "English tokens",
     TokenCategory.DIGIT: "Digit tokens",
+    TokenCategory.GREEK: "Greek tokens",
     TokenCategory.SPECIAL_SYMBOL: "Special symbol tokens",
     TokenCategory.OPERATOR: "Operator tokens",
     TokenCategory.GROUPING: "Grouping tokens",

@@ -15,8 +15,9 @@ from benchmark_design.ocr.tokenizer import tokenize_greedy
 
 
 class TokenCategory(StrEnum):
-    LATIN_VARIABLE = "latin variable tokens"
+    ENGLISH = "english tokens"
     DIGIT = "digit tokens"
+    GREEK = "greek tokens"
     SPECIAL_SYMBOL = "special symbol tokens"
     OPERATOR = "operator tokens"
     GROUPING = "grouping tokens"
@@ -31,10 +32,13 @@ PUNCTUATION_TOKENS: frozenset[str] = frozenset({",", ":", ".", ";", "!", "?", "'
 # Bare ``%`` (TeX comment) remains OTHER.
 LATEX_ESCAPE_GROUPING_TOKENS: frozenset[str] = frozenset({r"\_", r"\#", r"\%"})
 LAYOUT_ALIGNMENT_TOKENS: frozenset[str] = frozenset({r"\\", "&", "\\"})
+# TeX scope delimiters (argument groups), not visible printed braces.
+TEX_SCOPE_DELIMITER_TOKENS: frozenset[str] = frozenset({"{", "}"})
 
 TOKEN_CATEGORY_ORDER: tuple[TokenCategory, ...] = (
-    TokenCategory.LATIN_VARIABLE,
+    TokenCategory.ENGLISH,
     TokenCategory.DIGIT,
+    TokenCategory.GREEK,
     TokenCategory.SPECIAL_SYMBOL,
     TokenCategory.OPERATOR,
     TokenCategory.GROUPING,
@@ -58,7 +62,7 @@ def _is_cjk_char(char: str) -> bool:
 def build_taxonomy_sets() -> dict[TokenCategory, frozenset[str]]:
     """Build mutually exclusive lookup sets derived from ``commands.py`` groups."""
     grouping = frozenset(
-        {"(", ")", "{", "}", "[", "]"}
+        {"(", ")", "[", "]"}
         | {
             r"\left",
             r"\right",
@@ -87,6 +91,7 @@ def build_taxonomy_sets() -> dict[TokenCategory, frozenset[str]]:
 
     structural = frozenset(
         {"^", "_"}
+        | TEX_SCOPE_DELIMITER_TOKENS
         | cmd._FRACTION_BINOMIAL
         | cmd._ENVIRONMENTS
         | cmd._ACCENTS_STYLE
@@ -128,11 +133,10 @@ def build_taxonomy_sets() -> dict[TokenCategory, frozenset[str]]:
         }
     )
 
+    greek = frozenset(cmd._GREEK_LOWER | cmd._GREEK_UPPER | cmd._GREEK_VARIANTS)
+
     special = frozenset(
-        cmd._GREEK_LOWER
-        | cmd._GREEK_UPPER
-        | cmd._GREEK_VARIANTS
-        | cmd._ARROWS
+        cmd._ARROWS
         | cmd._MISC_SYMBOLS
         | (cmd._OPERATORS - structural_ops)
         | (cmd._SPACING_PUNCT - {r"\\", r"\,", r"\quad", r"\qquad"} - LATEX_ESCAPE_GROUPING_TOKENS)
@@ -143,12 +147,14 @@ def build_taxonomy_sets() -> dict[TokenCategory, frozenset[str]]:
 
     structural = frozenset(set(structural) - set(grouping))
     operators = frozenset(set(operators) - set(grouping) - set(structural))
-    special = frozenset(set(special) - set(grouping) - set(structural) - set(operators))
+    greek = frozenset(set(greek) - set(grouping) - set(structural) - set(operators))
+    special = frozenset(set(special) - set(grouping) - set(structural) - set(operators) - set(greek))
 
     return {
         TokenCategory.GROUPING: grouping,
         TokenCategory.STRUCTURAL: structural,
         TokenCategory.OPERATOR: operators,
+        TokenCategory.GREEK: greek,
         TokenCategory.SPECIAL_SYMBOL: special,
         TokenCategory.PUNCTUATION: PUNCTUATION_TOKENS,
         TokenCategory.LAYOUT_ALIGNMENT: LAYOUT_ALIGNMENT_TOKENS,
@@ -178,7 +184,7 @@ def classify_token(token: str) -> TokenCategory:
         if char.isdigit():
             return TokenCategory.DIGIT
         if char.isalpha() and char.isascii():
-            return TokenCategory.LATIN_VARIABLE
+            return TokenCategory.ENGLISH
 
     lookup = _taxonomy_lookup()
     if token in lookup:

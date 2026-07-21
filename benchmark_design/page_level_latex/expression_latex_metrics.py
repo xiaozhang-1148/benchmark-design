@@ -34,8 +34,7 @@ class ExpressionLatexMetricsRow:
     valid_for_latex: bool
     exclusion_reason: str
     token_count: int
-    length_bin: str
-    length_bin_key: str
+    ast_node_count: int
     ast_depth: int
     parse_ok: bool
     parse_error_count: int
@@ -85,8 +84,7 @@ def _row_from_parsed(
         valid_for_latex=valid,
         exclusion_reason="" if valid else reason,
         token_count=parsed.token_count if valid else 0,
-        length_bin=parsed.length_bin if valid else "",
-        length_bin_key=parsed.length_bin_key if valid else "",
+        ast_node_count=parsed.ast_node_count if valid else 0,
         ast_depth=parsed.ast_depth if valid else 0,
         parse_ok=parsed.parse_ok if valid else False,
         parse_error_count=parsed.parse_error_count if valid else 0,
@@ -198,8 +196,7 @@ def apply_rare10_pass2(
                 valid_for_latex=row.valid_for_latex,
                 exclusion_reason=row.exclusion_reason,
                 token_count=row.token_count,
-                length_bin=row.length_bin,
-                length_bin_key=row.length_bin_key,
+                ast_node_count=row.ast_node_count,
                 ast_depth=row.ast_depth,
                 parse_ok=row.parse_ok,
                 parse_error_count=row.parse_error_count,
@@ -243,8 +240,7 @@ def expression_metrics_to_frame(rows: Sequence[ExpressionLatexMetricsRow]) -> pd
         "valid_for_latex",
         "exclusion_reason",
         "token_count",
-        "length_bin",
-        "length_bin_key",
+        "ast_node_count",
         "ast_depth",
         "parse_ok",
         "parse_error_count",
@@ -293,8 +289,7 @@ def read_expression_latex_metrics_csv(path: Path) -> tuple[ExpressionLatexMetric
                 valid_for_latex=bool(record.get("valid_for_latex", False)),
                 exclusion_reason=str(record.get("exclusion_reason", "") or ""),
                 token_count=int(record.get("token_count", 0) or 0),
-                length_bin=str(record.get("length_bin", "") or ""),
-                length_bin_key=str(record.get("length_bin_key", "") or ""),
+                ast_node_count=int(record.get("ast_node_count", record.get("token_count", 0)) or 0),
                 ast_depth=int(record.get("ast_depth", 0) or 0),
                 parse_ok=bool(record.get("parse_ok", False)),
                 parse_error_count=int(record.get("parse_error_count", 0) or 0),

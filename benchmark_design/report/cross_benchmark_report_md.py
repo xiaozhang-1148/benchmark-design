@@ -265,15 +265,16 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
             "(same categories as Table 4). Each cell shows `count (share%)`. "
             "Punctuation and layout / alignment tokens are excluded from category columns.",
             "",
-            "| Dataset | Total tokens | Latin variable | Digit | Special symbol | Operator | Grouping | Structural | "
+            "| Dataset | Total tokens | English | Digit | Greek | Special symbol | Operator | Grouping | Structural | "
             "CJK | Other / unknown | Notes |",
-            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
         ]
     )
     taxonomy_shares = (
         lambda p: (
-            p.latin_variable_token_ratio,
+            p.english_token_ratio,
             p.digit_token_ratio,
+            p.greek_token_ratio,
             p.special_symbol_token_ratio,
             p.operator_token_ratio,
             p.grouping_token_ratio,

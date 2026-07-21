@@ -81,12 +81,12 @@ def test_page_level_latex_export_smoke(tmp_path: Path) -> None:
     assert (output_dir / "metrics" / "page_latex_metrics.csv").is_file()
     assert (output_dir / "summary" / "page_latex_protocol_audit.csv").is_file()
     assert (output_dir / "summary" / "page_latex_chapter5_consistency.csv").is_file()
-    assert (output_dir / "summary" / "page_latex_max_length_distribution.csv").is_file()
+    assert (output_dir / "summary" / "page_latex_ast_page_summary.csv").is_file()
     assert (output_dir / "summary" / "page_latex_similar_token_validation.csv").is_file()
-    assert (output_dir / "figures" / "fig6_1_page_scale.png").is_file()
+    assert (output_dir / "figures" / "fig6_1_page_ast_scale.png").is_file()
     assert (output_dir / "figures" / "fig6_5_structure_depth_joint.png").is_file()
     assert (output_dir / "figures" / "fig6_7_rare10.png").is_file()
-    assert (output_dir / "plot_data" / "fig6_1_page_scale_plot_data.csv").is_file()
+    assert (output_dir / "plot_data" / "fig6_1_page_ast_scale_plot_data.csv").is_file()
     summary = json.loads((output_dir / "dataset_summary.json").read_text(encoding="utf-8"))
     assert summary["valid_expression_count"] == 3
     assert summary["raw_expression_count"] == 4

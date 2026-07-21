@@ -138,8 +138,7 @@ class ParsedExpression:
     normalized_latex: str
     tokens: tuple[str, ...]
     token_count: int
-    length_bin: str
-    length_bin_key: str
+    ast_node_count: int
     ast_depth: int
     parse_status: str
     parse_ok: bool
@@ -222,7 +221,6 @@ def parse_expression(raw_ocr_text: str) -> ParsedExpression:
     """Full Chapter-5 protocol pass for one OCR string."""
     normalized = handle_delete_content(normalize_latex(raw_ocr_text))
     tokens = tokenize_latex(normalized) if normalized else ()
-    length_bin, length_bin_key = length_bin_for_token_count(len(tokens)) if tokens else ("", "")
     encoding = encode_position_forest_tokens(list(tokens)) if tokens else None
     parse_status = validate_parse_status(list(tokens)) if tokens else "ok"
     parse_ok = parse_status == "ok"
@@ -234,8 +232,7 @@ def parse_expression(raw_ocr_text: str) -> ParsedExpression:
         normalized_latex=normalized,
         tokens=tokens,
         token_count=len(tokens),
-        length_bin=length_bin,
-        length_bin_key=length_bin_key,
+        ast_node_count=len(tokens),
         ast_depth=int(encoding.max_nested_level) if encoding is not None else 0,
         parse_status=parse_status,
         parse_ok=parse_ok,

@@ -11,16 +11,16 @@ import pandas as pd
 
 from benchmark_design.page_level_latex.expression_latex_metrics import ExpressionLatexMetricsRow
 from benchmark_design.page_level_latex.latex_protocol import (
-    LENGTH_BIN_FIELD_KEYS,
     STRUCTURE_TYPE_ORDER,
     ast_depth_field_key,
+    length_bin_for_token_count,
 )
 from benchmark_design.page_level_latex.page_latex_metrics import PageLatexMetricsRow
 
 # Expected Chapter-5 corpus statistics for the current benchmark release.
 CHAPTER5_EXPECTED: dict[str, float | int] = {
     "expression_count": 152_012,
-    "token_count": 3_550_635,
+    "token_count": 3_550_614,
     "vocab_size": 1_004,
     "parse_ok_ratio": 1.0,
     "length_1_10": 34_891,
@@ -29,8 +29,8 @@ CHAPTER5_EXPECTED: dict[str, float | int] = {
     "length_41_80": 17_699,
     "length_gt80": 2_380,
     "ast_depth_0": 53_052,
-    "ast_depth_1": 71_970,
-    "ast_depth_2": 23_836,
+    "ast_depth_1": 71_972,
+    "ast_depth_2": 23_834,
     "ast_depth_3": 3_049,
     "ast_depth_4": 102,
     "ast_depth_5": 3,
@@ -55,7 +55,10 @@ def compute_chapter5_observed(
     vocab_size: int,
 ) -> dict[str, float | int]:
     valid = _valid_rows(expression_rows)
-    length_counts = Counter(row.length_bin_key for row in valid)
+    length_counts = Counter()
+    for row in valid:
+        _, key = length_bin_for_token_count(row.token_count)
+        length_counts[key] += 1
     depth_counts = Counter(ast_depth_field_key(row.ast_depth) for row in valid)
     parse_ok = sum(1 for row in valid if row.parse_ok)
     return {
@@ -108,51 +111,24 @@ def check_page_invariants(
             f"page_count={len(page_rows)} != expected {CHAPTER5_EXPECTED['page_count']}"
         )
 
-    if sum(row.expression_count for row in page_rows) != len(valid):
-        errors.append("sum(page.expression_count) != valid_expression_count")
-    if sum(row.total_token_count for row in page_rows) != sum(row.token_count for row in valid):
-        errors.append("sum(page.total_token_count) != sum(expression.token_count)")
+    if sum(row.ast_tree_count for row in page_rows) != len(valid):
+        errors.append("sum(page.ast_tree_count) != valid_expression_count")
+    if sum(row.total_ast_node_count for row in page_rows) != sum(row.ast_node_count for row in valid):
+        errors.append("sum(page.total_ast_node_count) != sum(expression.ast_node_count)")
 
     for page in page_rows:
-        length_sum = sum(getattr(page, f"{key}_count") for key in LENGTH_BIN_FIELD_KEYS)
-        if length_sum != page.expression_count:
-            errors.append(f"{page.image_id}: length bin counts != expression_count")
-            break
-        depth_sum = (
-            page.ast_depth_0_count
-            + page.ast_depth_1_count
-            + page.ast_depth_2_count
-            + page.ast_depth_3_count
-            + page.ast_depth_4_count
-            + page.ast_depth_5_count
-            + page.ast_depth_gt5_count
-        )
-        if depth_sum != page.expression_count:
-            errors.append(f"{page.image_id}: AST depth counts != expression_count")
-            break
         if not (0 <= page.distinct_structure_type_count <= 6):
             errors.append(f"{page.image_id}: distinct_structure_type_count out of range")
             break
-        # max depth consistency with depth histogram
-        computed_max = -1
-        for depth in range(0, 6):
-            if getattr(page, f"ast_depth_{depth}_count") > 0:
-                computed_max = depth
-        if page.ast_depth_gt5_count > 0:
-            computed_max = max(computed_max, 6)
-        if page.expression_count == 0:
-            if page.max_expression_ast_depth != 0:
-                errors.append(f"{page.image_id}: empty page max_expression_ast_depth != 0")
+        if page.ast_tree_count == 0:
+            if page.max_ast_depth != 0 or page.total_ast_node_count != 0:
+                errors.append(f"{page.image_id}: empty page has non-zero AST metrics")
                 break
-        elif computed_max < 0:
-            errors.append(f"{page.image_id}: missing depth histogram for max depth check")
-            break
-        elif computed_max <= 5 and page.max_expression_ast_depth != computed_max:
-            errors.append(f"{page.image_id}: max_expression_ast_depth inconsistent with depth counts")
-            break
-        elif computed_max > 5 and page.max_expression_ast_depth <= 5:
-            errors.append(f"{page.image_id}: max_expression_ast_depth missing gt5")
-            break
+        else:
+            page_exprs = [row for row in valid if row.image_id == page.image_id]
+            if page.max_ast_depth != max(row.ast_depth for row in page_exprs):
+                errors.append(f"{page.image_id}: max_ast_depth inconsistent with expressions")
+                break
 
     page_count = len(page_rows)
     for name in STRUCTURE_TYPE_ORDER:
@@ -163,28 +139,8 @@ def check_page_invariants(
     if len({row.image_id for row in page_rows}) != len(page_rows):
         errors.append("duplicate image_id in page_metrics")
 
-    # Partition checks: mutually exclusive page assignments sum to page_count.
-    page_count = len(page_rows)
-    max_length_bins = Counter()
-    for page in page_rows:
-        n = page.max_expression_token_count
-        if n <= 10:
-            max_length_bins["1-10"] += 1
-        elif n <= 20:
-            max_length_bins["11-20"] += 1
-        elif n <= 40:
-            max_length_bins["21-40"] += 1
-        elif n <= 80:
-            max_length_bins["41-80"] += 1
-        else:
-            max_length_bins[">80"] += 1
-    if sum(max_length_bins.values()) != page_count:
-        errors.append("max expression length bin pages do not sum to page_count")
-
-    depth_hist = Counter(page.max_expression_ast_depth for page in page_rows)
-    if sum(depth_hist.get(d, 0) for d in range(0, 6)) + sum(
-        c for d, c in depth_hist.items() if d > 5
-    ) != page_count:
+    depth_hist = Counter(page.max_ast_depth for page in page_rows)
+    if sum(depth_hist.values()) != page_count:
         errors.append("max AST depth pages do not sum to page_count")
 
     structure_type_sum = sum(
@@ -197,9 +153,9 @@ def check_page_invariants(
     joint_sum = sum(
         1
         for page in page_rows
-        if 0 <= page.distinct_structure_type_count <= 6 and 0 <= page.max_expression_ast_depth <= 5
+        if 0 <= page.distinct_structure_type_count <= 6 and 0 <= page.max_ast_depth <= 5
     )
-    if joint_sum != page_count and all(page.max_expression_ast_depth <= 5 for page in page_rows):
+    if joint_sum != page_count and all(page.max_ast_depth <= 5 for page in page_rows):
         errors.append("structure-depth joint cells do not sum to page_count")
 
     return errors

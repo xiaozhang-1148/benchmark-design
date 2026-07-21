@@ -26,16 +26,14 @@ from benchmark_design.page_level_latex.similar_tokens import (
 )
 from benchmark_design.page_level_latex.tables import (
     write_ast_depth_coverage,
+    write_ast_page_summary,
     write_distinct_token_distribution,
     write_distinct_token_summary,
-    write_length_coverage,
-    write_max_length_distribution,
     write_protocol_audit,
     write_rare8_occurrence_distribution,
     write_rare10_occurrence_distribution,
     write_rare10_summary,
     write_rare10_token_detail,
-    write_scale_summary,
     write_structure_combinations,
     write_structure_coverage,
     write_structure_depth_joint_distribution,
@@ -98,9 +96,7 @@ def run_page_level_latex_export(
         encoding="utf-8",
     )
 
-    write_scale_summary(page_rows, summary_dir / "page_latex_scale_summary.csv")
-    write_length_coverage(expression_rows, page_rows, summary_dir / "page_latex_length_coverage.csv")
-    write_max_length_distribution(page_rows, summary_dir / "page_latex_max_length_distribution.csv")
+    write_ast_page_summary(page_rows, summary_dir / "page_latex_ast_page_summary.csv")
     write_ast_depth_coverage(expression_rows, page_rows, summary_dir / "page_latex_ast_depth_coverage.csv")
     write_structure_coverage(expression_rows, page_rows, summary_dir / "page_latex_structure_coverage.csv")
     write_structure_type_count(page_rows, summary_dir / "page_latex_structure_type_count.csv")

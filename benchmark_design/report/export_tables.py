@@ -36,8 +36,9 @@ TOKEN_FREQUENCY_TOP_K = 100
 BIN_EXPORT_LABELS: tuple[str, ...] = ("1-10", "11-20", "21-40", "41-80", ">80")
 
 TAXONOMY_EXPORT_LABELS: dict[TokenCategory, str] = {
-    TokenCategory.LATIN_VARIABLE: "latin variable",
+    TokenCategory.ENGLISH: "english",
     TokenCategory.DIGIT: "digit",
+    TokenCategory.GREEK: "greek",
     TokenCategory.SPECIAL_SYMBOL: "special symbol",
     TokenCategory.OPERATOR: "operator",
     TokenCategory.GROUPING: "grouping",
