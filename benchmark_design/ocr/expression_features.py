@@ -12,12 +12,12 @@ from benchmark_design.io.benchmark_loader import ExpressionRecord
 from benchmark_design.ocr.duplicates import DuplicateIndex, normalize_expression_latex
 from benchmark_design.ocr.length_bin_specs import assign_length_bin
 from benchmark_design.ocr.parse_validate import validate_parse_status
-from benchmark_design.ocr.position_forest import encode_position_forest_tokens
 from benchmark_design.ocr.structure_distribution import (
     STRUCTURE_TYPES,
     max_structure_depth,
     structure_types_present_in_tokens,
 )
+from benchmark_design.ocr.structure_forest import compute_ast_forest_metrics
 from benchmark_design.ocr.token_taxonomy import TOKEN_CATEGORY_ORDER, TokenCategory, classify_token
 
 RARE_THRESHOLDS: tuple[int, ...] = (1, 5, 10)
@@ -85,11 +85,7 @@ def extract_single_features(
 ) -> ExpressionFeatures:
     token_list = list(tokens)
     structure_types = tuple(sorted(structure_types_present_in_tokens(token_list)))
-    encoding = encode_position_forest_tokens(token_list)
-    if encoding.nested_levels:
-        mean_token_nested_level = sum(encoding.nested_levels) / len(encoding.nested_levels)
-    else:
-        mean_token_nested_level = 0.0
+    forest = compute_ast_forest_metrics(token_list)
 
     return ExpressionFeatures(
         expression_id=record.expression_id or f"{record.dataset}:{record.image_name}",
@@ -110,8 +106,8 @@ def extract_single_features(
         structure_types=structure_types,
         structure_type_count=len(structure_types),
         structure_max_depths=_structure_max_depths(token_list),
-        ast_depth=encoding.max_nested_level,
-        mean_token_nested_level=mean_token_nested_level,
+        ast_depth=forest.ast_depth,
+        mean_token_nested_level=forest.mean_ast_node_depth,
         parse_status=validate_parse_status(token_list),
     )
 

@@ -7,27 +7,28 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from benchmark_design.ocr.matrix_environments import find_valid_matrix_environment_span
-from benchmark_design.ocr.position_forest import (
-    FRACTION_TRIGGERS,
-    SUPERSCRIPT_TRIGGERS,
-    _find_fraction_arg_ends,
-    _find_single_arg_substructure_end,
+from benchmark_design.ocr.structure_forest import (
+    StructureNode,
+    build_structure_forest,
+    stc_display_type,
 )
 
 if TYPE_CHECKING:
     from benchmark_design.ocr.expression_features import ExpressionFeatures
 
-LIM_TRIGGERS: frozenset[str] = frozenset({r"\lim", r"\limsup", r"\liminf"})
-BIG_OPERATOR_TRIGGERS: frozenset[str] = frozenset({r"\sum"}) | LIM_TRIGGERS
-
-STC_TYPE_LABELS: tuple[str, ...] = ("Env", "Frac", "Sqrt", "Sup", "Sub", "Lim", "Sum")
-
-
-@dataclass(frozen=True, slots=True)
-class StructureNode:
-    stc_type: str
-    children: tuple[StructureNode, ...]
+STC_TYPE_LABELS: tuple[str, ...] = (
+    "Env",
+    "Frac",
+    "Sqrt",
+    "Sup",
+    "Sub",
+    "Lim",
+    "Sum",
+    "Int",
+    "Accent",
+    "Stackrel",
+    "Textcircled",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,83 +78,15 @@ def format_single_node(node: SingleNodeCount) -> str:
     return node.stc_type
 
 
-def _parse_sequence(tokens: list[str], start: int, end: int) -> list[StructureNode]:
-    roots: list[StructureNode] = []
-    index = start
-    while index < end:
-        matrix_span = find_valid_matrix_environment_span(tokens, index)
-        if matrix_span is not None:
-            body_start, end_begin, after_block = matrix_span
-            body_roots = _parse_sequence(tokens, body_start, end_begin)
-            roots.append(StructureNode("Env", tuple(body_roots)))
-            index = after_block
-            continue
-
-        token = tokens[index]
-        if token in FRACTION_TRIGGERS:
-            first_end, second_end = _find_fraction_arg_ends(tokens, index)
-            num_roots = _parse_sequence(tokens, index + 1, first_end + 1)
-            den_roots = _parse_sequence(tokens, first_end + 1, second_end + 1)
-            roots.append(StructureNode("Frac", tuple(num_roots + den_roots)))
-            index = second_end + 1
-            continue
-
-        if token in SUPERSCRIPT_TRIGGERS:
-            sub_end = _find_single_arg_substructure_end(tokens, index)
-            arg_roots = _parse_sequence(tokens, index + 1, sub_end + 1)
-            roots.append(StructureNode("Sup", tuple(arg_roots)))
-            index = sub_end + 1
-            continue
-
-        if token == "_":
-            sub_end = _find_single_arg_substructure_end(tokens, index)
-            arg_roots = _parse_sequence(tokens, index + 1, sub_end + 1)
-            roots.append(StructureNode("Sub", tuple(arg_roots)))
-            index = sub_end + 1
-            continue
-
-        if token == r"\sqrt":
-            sub_end = _find_single_arg_substructure_end(tokens, index)
-            arg_roots = _parse_sequence(tokens, index + 1, sub_end + 1)
-            roots.append(StructureNode("Sqrt", tuple(arg_roots)))
-            index = sub_end + 1
-            continue
-
-        if token in BIG_OPERATOR_TRIGGERS:
-            op_type = "Sum" if token == r"\sum" else "Lim"
-            node, index = _parse_big_operator(tokens, index, end, op_type)
-            roots.append(node)
-            continue
-
-        index += 1
-    return roots
+def _to_stc_node(node: StructureNode) -> StructureNode:
+    return StructureNode(
+        stc_display_type(node.stc_type),
+        tuple(_to_stc_node(child) for child in node.children),
+    )
 
 
-def _parse_big_operator(
-    tokens: list[str],
-    index: int,
-    end: int,
-    op_type: str,
-) -> tuple[StructureNode, int]:
-    children: list[StructureNode] = []
-    next_idx = index + 1
-    while next_idx < end and tokens[next_idx] in ("_", "^"):
-        if tokens[next_idx] == "_":
-            sub_end = _find_single_arg_substructure_end(tokens, next_idx)
-            arg_roots = _parse_sequence(tokens, next_idx + 1, sub_end + 1)
-            children.append(StructureNode("Sub", tuple(arg_roots)))
-            next_idx = sub_end + 1
-            continue
-        sub_end = _find_single_arg_substructure_end(tokens, next_idx)
-        arg_roots = _parse_sequence(tokens, next_idx + 1, sub_end + 1)
-        children.append(StructureNode("Sup", tuple(arg_roots)))
-        next_idx = sub_end + 1
-    return StructureNode(op_type, tuple(children)), next_idx
-
-
-def build_structure_forest(tokens: list[str]) -> tuple[StructureNode, ...]:
-    """Return top-level structure roots parsed from *tokens*."""
-    return tuple(_parse_sequence(tokens, 0, len(tokens)))
+def _stc_forest(tokens: list[str]) -> tuple[StructureNode, ...]:
+    return tuple(_to_stc_node(root) for root in build_structure_forest(tokens))
 
 
 def _compress_types(types: list[str]) -> tuple[tuple[str, ...], tuple[int, ...]]:
@@ -260,7 +193,7 @@ def _is_proper_suffix(short: list[str], long: list[str]) -> bool:
 
 def compute_ntc_cbc(tokens: list[str]) -> NtcCbcResult:
     """Compute nested traversal cost and co-occurrence breadth count."""
-    roots = build_structure_forest(tokens)
+    roots = _stc_forest(tokens)
     chain_entries = _collect_all_chain_entries(roots)
     kept_chains = _dedup_subchains(chain_entries)
     raw_counter: Counter[tuple[str, ...]] = Counter(tuple(chain) for chain in kept_chains)

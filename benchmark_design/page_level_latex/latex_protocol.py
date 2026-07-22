@@ -5,13 +5,13 @@ This module is the single entry point for:
 - greedy tokenization
 - \\delete retention (as special symbol tokens)
 - token taxonomy
-- AST / position-forest parsing
-- six structure types used by page-level LaTeX tables
+- unified structure-forest AST parsing
+- nine structure types (six core + three extended)
 - length-bin assignment
 - Rare-10 corpus-frequency helpers
 
 All call sites must go through these helpers so Chapter 5 and Chapter 6 agree on
-token length and AST depth for the same expression.
+AST depth, AST node count, and structure flags for the same expression.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ from benchmark_design.ocr.length_bin_specs import (
     LengthBinSpec,
     assign_length_bin,
 )
-from benchmark_design.ocr.matrix_environments import (
-    MATRIX_ENVIRONMENT_NAMES,
-    expression_has_matrix_environment,
-)
 from benchmark_design.ocr.parse_validate import validate_parse_status
-from benchmark_design.ocr.position_forest import encode_position_forest_tokens
+from benchmark_design.ocr.structure_forest import (
+    AST_STRUCTURE_SPECS,
+    STRUCTURE_TYPE_ORDER,
+    compute_ast_forest_metrics,
+)
 from benchmark_design.ocr.token_taxonomy import (
     TOKEN_CATEGORY_ORDER,
     TokenCategory,
@@ -41,15 +41,6 @@ from benchmark_design.ocr.token_taxonomy import (
 from benchmark_design.ocr.tokenizer import build_latex_vocab, tokenize_greedy
 
 DELETE_TOKENS: frozenset[str] = frozenset({r"\delete", r"\ddelete", r"\deleted"})
-
-# Chapter-6 page-latex structure taxonomy (stable English IDs).
-STRUCTURE_TYPE_ORDER: tuple[str, ...] = ("frac", "sup", "sub", "sqrt", "sum", "env")
-
-FRAC_TRIGGERS: frozenset[str] = frozenset({r"\frac", r"\dfrac", r"\tfrac"})
-SUP_TRIGGERS: frozenset[str] = frozenset({"^"})
-SUB_TRIGGERS: frozenset[str] = frozenset({"_"})
-SQRT_TRIGGERS: frozenset[str] = frozenset({r"\sqrt"})
-SUM_TRIGGERS: frozenset[str] = frozenset({r"\sum"})  # Chapter-5 original rule
 
 LENGTH_BIN_FIELD_KEYS: tuple[str, ...] = (
     "length_1_10",
@@ -104,8 +95,11 @@ class StructureFlags:
     has_sup: bool
     has_sub: bool
     has_sqrt: bool
-    has_sum: bool
     has_env: bool
+    has_bigop: bool
+    has_accent: bool
+    has_stackrel: bool
+    has_textcircled: bool
 
     @property
     def structure_type_count(self) -> int:
@@ -115,8 +109,11 @@ class StructureFlags:
                 self.has_sup,
                 self.has_sub,
                 self.has_sqrt,
-                self.has_sum,
                 self.has_env,
+                self.has_bigop,
+                self.has_accent,
+                self.has_stackrel,
+                self.has_textcircled,
             )
         )
 
@@ -126,8 +123,11 @@ class StructureFlags:
             ("sup", self.has_sup),
             ("sub", self.has_sub),
             ("sqrt", self.has_sqrt),
-            ("sum", self.has_sum),
             ("env", self.has_env),
+            ("bigop", self.has_bigop),
+            ("accent", self.has_accent),
+            ("stackrel", self.has_stackrel),
+            ("textcircled", self.has_textcircled),
         )
         return tuple(name for name, present in flags if present)
 
@@ -175,14 +175,18 @@ def length_bin_for_token_count(token_count: int) -> tuple[str, str]:
 
 
 def detect_structures(tokens: Sequence[str]) -> StructureFlags:
-    token_set = set(tokens)
+    metrics = compute_ast_forest_metrics(list(tokens))
+    flags = metrics.structure_flags
     return StructureFlags(
-        has_frac=bool(token_set & FRAC_TRIGGERS),
-        has_sup=bool(token_set & SUP_TRIGGERS),
-        has_sub=bool(token_set & SUB_TRIGGERS),
-        has_sqrt=bool(token_set & SQRT_TRIGGERS),
-        has_sum=bool(token_set & SUM_TRIGGERS),
-        has_env=expression_has_matrix_environment(list(tokens)),
+        has_frac=flags["frac"],
+        has_sup=flags["sup"],
+        has_sub=flags["sub"],
+        has_sqrt=flags["sqrt"],
+        has_env=flags["env"],
+        has_bigop=flags["bigop"],
+        has_accent=flags["accent"],
+        has_stackrel=flags["stackrel"],
+        has_textcircled=flags["textcircled"],
     )
 
 
@@ -221,10 +225,12 @@ def parse_expression(raw_ocr_text: str) -> ParsedExpression:
     """Full Chapter-5 protocol pass for one OCR string."""
     normalized = handle_delete_content(normalize_latex(raw_ocr_text))
     tokens = tokenize_latex(normalized) if normalized else ()
-    encoding = encode_position_forest_tokens(list(tokens)) if tokens else None
+    forest = compute_ast_forest_metrics(list(tokens)) if tokens else None
     parse_status = validate_parse_status(list(tokens)) if tokens else "ok"
     parse_ok = parse_status == "ok"
-    structure = detect_structures(tokens) if tokens else StructureFlags(False, False, False, False, False, False)
+    structure = detect_structures(tokens) if tokens else StructureFlags(
+        False, False, False, False, False, False, False, False, False
+    )
     category_counts = token_category_counts(tokens) if tokens else empty_token_category_counts()
     unknown = category_counts.get(TAXONOMY_CATEGORY_TO_FIELD[TokenCategory.OTHER], 0)
     return ParsedExpression(
@@ -232,8 +238,8 @@ def parse_expression(raw_ocr_text: str) -> ParsedExpression:
         normalized_latex=normalized,
         tokens=tokens,
         token_count=len(tokens),
-        ast_node_count=len(tokens),
-        ast_depth=int(encoding.max_nested_level) if encoding is not None else 0,
+        ast_node_count=int(forest.ast_node_count) if forest is not None else 0,
+        ast_depth=int(forest.ast_depth) if forest is not None else 0,
         parse_status=parse_status,
         parse_ok=parse_ok,
         parse_error_count=0 if parse_ok else 1,
@@ -283,13 +289,12 @@ def accumulate_token_counter(token_sequences: Iterable[Sequence[str]]) -> Counte
 
 __all__ = [
     "AST_DEPTH_FIELD_KEYS",
+    "AST_STRUCTURE_SPECS",
     "DEFAULT_LENGTH_BINS",
     "DELETE_TOKENS",
-    "FRAC_TRIGGERS",
     "LENGTH_BIN_FIELD_KEYS",
     "LENGTH_BIN_KEY_TO_DISPLAY",
     "LENGTH_BIN_LABEL_TO_KEY",
-    "MATRIX_ENVIRONMENT_NAMES",
     "ParsedExpression",
     "RARE10_THRESHOLD",
     "STRUCTURE_TYPE_ORDER",

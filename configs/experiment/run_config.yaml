@@ -7,7 +7,7 @@ method_name: "DeepSeek-OCR2 mean-pooled projected-token embedding"
 
 model:
   name_or_path: "deepseek-ai/DeepSeek-OCR-2"
-  local_path: "/mnt/nvme_model/baoquan/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-OCR-2/snapshots/aaa02f3811945a91062062994c5c4a3f4c0af2b0"
+  local_path: "/mnt/nvme_model/.cache/huggingface/hub/models--deepseek-ai--DeepSeek-OCR-2/snapshots/aaa02f3811945a91062062994c5c4a3f4c0af2b0"
   revision: "aaa02f3811945a91062062994c5c4a3f4c0af2b0"
   dtype: "bfloat16"
   attn_implementation: "eager"
@@ -25,12 +25,12 @@ exclude_view_separator: true
 random_seed: 42
 
 data:
-  input_dir: "/mnt/nvme_user/baoquan/Label_Data/images_folder"
+  input_dir: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/ALL-data/ALL_Benchmark"
   image_extensions: [".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"]
   recursive: true
 
 paths:
-  experiment_root: "/mnt/nvme_user/baoquan/Label_Data/benchmark-export"
+  experiment_root: "/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/ALL-data/ALL_embedding"
 
 extract:
   data_parallel_size: auto

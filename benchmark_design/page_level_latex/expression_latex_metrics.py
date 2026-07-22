@@ -43,8 +43,11 @@ class ExpressionLatexMetricsRow:
     has_sup: bool
     has_sub: bool
     has_sqrt: bool
-    has_sum: bool
     has_env: bool
+    has_bigop: bool
+    has_accent: bool
+    has_stackrel: bool
+    has_textcircled: bool
     structure_type_count: int
     structure_combination: str
     contains_delete: bool
@@ -93,8 +96,11 @@ def _row_from_parsed(
         has_sup=parsed.structure.has_sup if valid else False,
         has_sub=parsed.structure.has_sub if valid else False,
         has_sqrt=parsed.structure.has_sqrt if valid else False,
-        has_sum=parsed.structure.has_sum if valid else False,
         has_env=parsed.structure.has_env if valid else False,
+        has_bigop=parsed.structure.has_bigop if valid else False,
+        has_accent=parsed.structure.has_accent if valid else False,
+        has_stackrel=parsed.structure.has_stackrel if valid else False,
+        has_textcircled=parsed.structure.has_textcircled if valid else False,
         structure_type_count=parsed.structure.structure_type_count if valid else 0,
         structure_combination=parsed.structure_combination if valid else "",
         contains_delete=parsed.contains_delete,
@@ -205,8 +211,11 @@ def apply_rare10_pass2(
                 has_sup=row.has_sup,
                 has_sub=row.has_sub,
                 has_sqrt=row.has_sqrt,
-                has_sum=row.has_sum,
                 has_env=row.has_env,
+                has_bigop=row.has_bigop,
+                has_accent=row.has_accent,
+                has_stackrel=row.has_stackrel,
+                has_textcircled=row.has_textcircled,
                 structure_type_count=row.structure_type_count,
                 structure_combination=row.structure_combination,
                 contains_delete=row.contains_delete,
@@ -249,8 +258,11 @@ def expression_metrics_to_frame(rows: Sequence[ExpressionLatexMetricsRow]) -> pd
         "has_sup",
         "has_sub",
         "has_sqrt",
-        "has_sum",
         "has_env",
+        "has_bigop",
+        "has_accent",
+        "has_stackrel",
+        "has_textcircled",
         "structure_type_count",
         "structure_combination",
         *TAXONOMY_FIELD_KEYS,
@@ -298,8 +310,11 @@ def read_expression_latex_metrics_csv(path: Path) -> tuple[ExpressionLatexMetric
                 has_sup=bool(record.get("has_sup", False)),
                 has_sub=bool(record.get("has_sub", False)),
                 has_sqrt=bool(record.get("has_sqrt", False)),
-                has_sum=bool(record.get("has_sum", False)),
                 has_env=bool(record.get("has_env", False)),
+                has_bigop=bool(record.get("has_bigop", record.get("has_sum", False))),
+                has_accent=bool(record.get("has_accent", False)),
+                has_stackrel=bool(record.get("has_stackrel", False)),
+                has_textcircled=bool(record.get("has_textcircled", False)),
                 structure_type_count=int(record.get("structure_type_count", 0) or 0),
                 structure_combination=str(record.get("structure_combination", "") or ""),
                 contains_delete=bool(record.get("contains_delete", False)),

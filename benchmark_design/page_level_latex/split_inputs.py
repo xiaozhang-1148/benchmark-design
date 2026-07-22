@@ -111,12 +111,7 @@ def _page_structure_flags(page: PageLatexMetricsRow) -> dict[str, int]:
             f"presence_sum={structure_type_count} distinct={page.distinct_structure_type_count}"
         )
     return {
-        "has_frac": present["frac"],
-        "has_sup": present["sup"],
-        "has_sub": present["sub"],
-        "has_sqrt": present["sqrt"],
-        "has_sum": present["sum"],
-        "has_env": present["env"],
+        **{f"has_{name}": present[name] for name in STRUCTURE_TYPE_ORDER},
         "structure_type_count": structure_type_count,
     }
 
@@ -203,14 +198,7 @@ def build_page_hmer_features(
             **similar_flags[page.image_id],
         }
         # Hard check structure identity.
-        expected = (
-            record["has_frac"]
-            + record["has_sup"]
-            + record["has_sub"]
-            + record["has_sqrt"]
-            + record["has_sum"]
-            + record["has_env"]
-        )
+        expected = sum(record[f"has_{name}"] for name in STRUCTURE_TYPE_ORDER)
         if record["structure_type_count"] != expected:
             raise ValueError(
                 f"{page.image_id}: structure_type_count={record['structure_type_count']} "

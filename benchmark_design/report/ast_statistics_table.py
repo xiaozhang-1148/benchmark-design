@@ -1,4 +1,4 @@
-"""Write PosFormer AST depth statistics tables."""
+"""Write structure-forest AST depth statistics tables."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def write_ast_statistics_metadata(
     payload = {
         "generated_at": datetime.now(UTC).isoformat(),
         "input_dir": relative_input_path(input_dir),
-        "reference": "PosFormer arXiv:2407.07764 Algorithm 1 / Appendix A.1",
+        "reference": "benchmark_design.ocr.structure_forest (unified LaTeX structure forest)",
         "expression_count": metrics.expression_count,
         "summary": [
             {"metric": metric, "definition": definition, "value": value}

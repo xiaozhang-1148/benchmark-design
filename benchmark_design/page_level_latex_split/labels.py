@@ -13,8 +13,11 @@ BINARY_LABEL_COLUMNS = (
     "has_sup",
     "has_sub",
     "has_sqrt",
-    "has_sum",
     "has_env",
+    "has_bigop",
+    "has_accent",
+    "has_stackrel",
+    "has_textcircled",
     "has_rare8",
     "has_digit_letter_pair",
     "has_circle_like_pair",
@@ -72,9 +75,9 @@ def assign_depth_label(depth: int, mapping: dict[str, tuple[int, ...]]) -> str:
 def build_page_labels(features: pd.DataFrame, config: SplitConfig) -> list[PageLabels]:
     rows: list[PageLabels] = []
     for rec in features.itertuples(index=False):
-        expr_bin = assign_bin(float(rec.expression_count), config.expression_count_bins)
-        token_bin = assign_bin(float(rec.page_token_count), config.page_token_bins)
-        maxlen_bin = assign_bin(float(rec.max_expression_token_count), config.max_expression_token_bins)
+        expr_bin = assign_bin(float(rec.ast_tree_count), config.expression_count_bins)
+        token_bin = assign_bin(float(rec.total_ast_node_count), config.page_token_bins)
+        maxlen_bin = assign_bin(float(rec.max_ast_depth), config.max_expression_token_bins)
         depth_bin = assign_depth_label(int(rec.max_ast_depth), config.ast_depth_labels)
         structure_count = int(rec.structure_type_count)
         max_ast_depth = int(rec.max_ast_depth)
@@ -113,9 +116,8 @@ def labels_to_frame(page_labels: list[PageLabels], features: pd.DataFrame) -> pd
         lab = label_map[page_id]
         record = {
             "page_id": page_id,
-            "expression_count": int(rec.expression_count),
-            "page_token_count": int(rec.page_token_count),
-            "max_expression_token_count": int(rec.max_expression_token_count),
+            "ast_tree_count": int(rec.ast_tree_count),
+            "total_ast_node_count": int(rec.total_ast_node_count),
             "max_ast_depth": int(rec.max_ast_depth),
             "structure_type_count": int(rec.structure_type_count),
             "expr_bin": lab.expr_bin,

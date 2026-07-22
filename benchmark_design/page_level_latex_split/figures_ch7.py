@@ -32,8 +32,11 @@ STRUCTURE_NAMES = {
     "has_sup": "Superscript",
     "has_sub": "Subscript",
     "has_sqrt": "Radical",
-    "has_sum": "Summation",
     "has_env": "Environment",
+    "has_bigop": "Big operators",
+    "has_accent": "Accents",
+    "has_stackrel": "Stackrel",
+    "has_textcircled": "Textcircled",
 }
 
 EXPR_BIN_ORDER = [

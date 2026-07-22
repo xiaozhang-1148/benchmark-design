@@ -11,6 +11,7 @@ import pandas as pd
 
 from benchmark_design.page_level_latex.expression_latex_metrics import ExpressionLatexMetricsRow
 from benchmark_design.page_level_latex.latex_protocol import (
+    AST_STRUCTURE_SPECS,
     STRUCTURE_TYPE_ORDER,
     TAXONOMY_CATEGORY_TO_FIELD,
     TOKEN_CATEGORY_ORDER,
@@ -115,13 +116,18 @@ def write_structure_coverage(
     valid = [row for row in expression_rows if row.valid_for_latex]
     total_expr = len(valid)
     total_pages = len(page_rows)
+    spec_by_id = {spec.structure_type: spec for spec in AST_STRUCTURE_SPECS}
     records = []
     for name in STRUCTURE_TYPE_ORDER:
+        spec = spec_by_id[name]
         expr_count = sum(1 for row in valid if getattr(row, f"has_{name}"))
         page_cover = sum(1 for page in page_rows if getattr(page, f"{name}_expression_count") > 0)
         records.append(
             {
-                "structure_type": name,
+                "structure_tier": "核心结构" if spec.structure_tier == "core" else "扩展结构",
+                "structure_type": spec.display_name,
+                "structure_id": name,
+                "trigger_tokens": spec.trigger_tokens,
                 "expression_count": expr_count,
                 "expression_ratio": expr_count / total_expr if total_expr else 0.0,
                 "page_count": page_cover,
@@ -144,7 +150,7 @@ def write_structure_type_count(page_rows: Sequence[PageLatexMetricsRow], output_
                 "page_count": counts.get(value, 0),
                 "page_ratio": counts.get(value, 0) / total_pages if total_pages else 0.0,
             }
-            for value in range(0, 7)
+            for value in range(0, len(STRUCTURE_TYPE_ORDER) + 1)
         ]
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)

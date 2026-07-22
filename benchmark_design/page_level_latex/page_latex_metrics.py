@@ -27,10 +27,14 @@ class PageLatexMetricsRow:
     sup_expression_count: int
     sub_expression_count: int
     sqrt_expression_count: int
-    sum_expression_count: int
     env_expression_count: int
+    bigop_expression_count: int
+    accent_expression_count: int
+    stackrel_expression_count: int
+    textcircled_expression_count: int
     distinct_structure_type_count: int
     structure_combination: str
+    total_token_count: int
     distinct_token_count: int
     rare10_token_occurrence_count: int
     rare10_expression_count: int
@@ -45,10 +49,12 @@ def _aggregate_page(image_id: str, rows: list[ExpressionLatexMetricsRow]) -> Pag
     page_structure_present = {name: False for name in STRUCTURE_TYPE_ORDER}
     rare10_token_occurrences = 0
     rare10_expression_count = 0
+    total_token_count = 0
     max_ast_depth = 0
     total_ast_node_count = 0
 
     for row in rows:
+        total_token_count += row.token_count
         total_ast_node_count += row.ast_node_count
         max_ast_depth = max(max_ast_depth, row.ast_depth)
         for name in STRUCTURE_TYPE_ORDER:
@@ -72,10 +78,14 @@ def _aggregate_page(image_id: str, rows: list[ExpressionLatexMetricsRow]) -> Pag
         sup_expression_count=structure_counts["sup"],
         sub_expression_count=structure_counts["sub"],
         sqrt_expression_count=structure_counts["sqrt"],
-        sum_expression_count=structure_counts["sum"],
         env_expression_count=structure_counts["env"],
+        bigop_expression_count=structure_counts["bigop"],
+        accent_expression_count=structure_counts["accent"],
+        stackrel_expression_count=structure_counts["stackrel"],
+        textcircled_expression_count=structure_counts["textcircled"],
         distinct_structure_type_count=len(present_types),
         structure_combination="+".join(present_types),
+        total_token_count=total_token_count,
         distinct_token_count=len(page_token_counter),
         rare10_token_occurrence_count=rare10_token_occurrences,
         rare10_expression_count=rare10_expression_count,
@@ -117,7 +127,7 @@ def page_metrics_to_frame(rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
         *[f"{name}_expression_count" for name in STRUCTURE_TYPE_ORDER],
         "distinct_structure_type_count",
         "structure_combination",
-        *TAXONOMY_FIELD_KEYS,
+        "total_token_count",
         "distinct_token_count",
         "rare10_token_occurrence_count",
         "rare10_expression_count",
@@ -147,10 +157,16 @@ def read_page_latex_metrics_csv(path: Path) -> list[PageLatexMetricsRow]:
                 sup_expression_count=int(record.get("sup_expression_count", 0) or 0),
                 sub_expression_count=int(record.get("sub_expression_count", 0) or 0),
                 sqrt_expression_count=int(record.get("sqrt_expression_count", 0) or 0),
-                sum_expression_count=int(record.get("sum_expression_count", 0) or 0),
                 env_expression_count=int(record.get("env_expression_count", 0) or 0),
+                bigop_expression_count=int(
+                    record.get("bigop_expression_count", record.get("sum_expression_count", 0)) or 0
+                ),
+                accent_expression_count=int(record.get("accent_expression_count", 0) or 0),
+                stackrel_expression_count=int(record.get("stackrel_expression_count", 0) or 0),
+                textcircled_expression_count=int(record.get("textcircled_expression_count", 0) or 0),
                 distinct_structure_type_count=int(record.get("distinct_structure_type_count", 0) or 0),
                 structure_combination=str(record.get("structure_combination", "") or ""),
+                total_token_count=int(record.get("total_token_count", 0) or 0),
                 distinct_token_count=int(record.get("distinct_token_count", 0) or 0),
                 rare10_token_occurrence_count=int(record.get("rare10_token_occurrence_count", 0) or 0),
                 rare10_expression_count=int(record.get("rare10_expression_count", 0) or 0),

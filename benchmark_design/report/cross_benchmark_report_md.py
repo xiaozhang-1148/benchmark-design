@@ -192,7 +192,7 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
             "",
             "## 6. AST Depth Distribution",
             "",
-            "Expression counts and shares by PosFormer max nested level (`ast_depth`). "
+            "Expression counts and shares by structure-forest AST depth (`ast_depth`). "
             "Each depth cell shows `count (share%)`.",
             "",
             f"| Dataset | {ast_headers} | Max |",
@@ -217,7 +217,7 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
             "",
             "Expression counts and shares by **Expression-level Structural Difficulty** tier, derived from "
             "L/B/D coordinates: **L** token length (L0 ≤ 20, L1 21–40, L2 > 40), **B** structure breadth "
-            "(B0 0–1 types, B1 2 types, B2 ≥ 3 types), **D** PosFormer AST depth (D0 0–1, D1 2, D2 ≥ 3). "
+            "(B0 0–1 types, B1 2 types, B2 ≥ 3 types), **D** structure-forest AST depth (D0 0–1, D1 2, D2 ≥ 3). "
             "Classification: **L1** (L0B0D0); **L4** (≥ 2 of L2/B2/D2 with L ≠ L0 and D ≠ D0); "
             "**L2** (score = 1, or score = 2 with L ≠ L2 and D ≠ D2); **L3** (all remaining). "
             "Each cell shows `count (share%)`.",

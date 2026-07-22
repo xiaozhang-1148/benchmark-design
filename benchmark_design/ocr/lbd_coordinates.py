@@ -6,8 +6,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from benchmark_design.ocr.matrix_environments import expression_has_matrix_environment
-from benchmark_design.ocr.position_forest import FRACTION_TRIGGERS, encode_position_forest_tokens
+from benchmark_design.ocr.structure_forest import STRUCTURE_TYPE_ORDER, compute_ast_forest_metrics
 
 EXPRESSION_STRUCTURAL_DIFFICULTY_LABEL = "Expression-level Structural Difficulty"
 
@@ -33,7 +32,7 @@ D_RANGES: dict[str, str] = {
     "D2": ">=3",
 }
 
-LBD_STRUCTURE_TYPE_ORDER: tuple[str, ...] = ("env", "frac", "sqrt", "sub", "sum", "sup")
+LBD_STRUCTURE_TYPE_ORDER: tuple[str, ...] = STRUCTURE_TYPE_ORDER
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,21 +80,8 @@ class LbdCoordinateMetrics:
 
 
 def lbd_structure_types_present(tokens: Sequence[str]) -> tuple[str, ...]:
-    """Return sorted L/B/D structure types present in *tokens*."""
-    present: set[str] = set()
-    if any(token in FRACTION_TRIGGERS for token in tokens):
-        present.add("frac")
-    if "^" in tokens:
-        present.add("sup")
-    if "_" in tokens:
-        present.add("sub")
-    if r"\sqrt" in tokens:
-        present.add("sqrt")
-    if r"\sum" in tokens:
-        present.add("sum")
-    if expression_has_matrix_environment(list(tokens)):
-        present.add("env")
-    return tuple(spec for spec in LBD_STRUCTURE_TYPE_ORDER if spec in present)
+    """Return L/B/D structure types present in *tokens* (forest order)."""
+    return compute_ast_forest_metrics(list(tokens)).present_types()
 
 
 def assign_l_bin(token_length: int) -> str:
@@ -177,9 +163,7 @@ def assign_expression_lbd_coordinate(
     structure_types = lbd_structure_types_present(tokens)
     structure_type_count = len(structure_types)
     resolved_ast_depth = (
-        ast_depth
-        if ast_depth is not None
-        else encode_position_forest_tokens(tokens).max_nested_level
+        ast_depth if ast_depth is not None else compute_ast_forest_metrics(tokens).ast_depth
     )
     l_bin = assign_l_bin(resolved_length)
     b_bin = assign_b_bin(structure_type_count)

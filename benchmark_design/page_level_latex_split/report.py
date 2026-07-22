@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from benchmark_design.export_layout import cross_domain_inputs_available
-from benchmark_design.page_level_latex_split.config import SplitConfig
+from benchmark_design.page_level_latex_split.io_validate import STRUCTURE_HAS_COLUMNS
 from benchmark_design.page_level_latex_split.cross_domain_tables import write_cross_domain_tables
 from benchmark_design.page_level_latex_split.figures_ch7 import export_ch7_figures, remove_legacy_figures
 from benchmark_design.page_level_latex_split.labels import BINARY_LABEL_COLUMNS, PageLabels
@@ -44,8 +44,8 @@ def write_table1_scale(merged: pd.DataFrame, path: Path) -> None:
                 "split": split,
                 "page_count": len(sub),
                 "page_ratio": len(sub) / n if n else 0.0,
-                "expression_count": int(sub["expression_count"].sum()),
-                "token_total": int(sub["page_token_count"].sum()),
+                "ast_tree_count": int(sub["ast_tree_count"].sum()),
+                "total_ast_node_count": int(sub["total_ast_node_count"].sum()),
             }
         )
     pd.DataFrame(rows).to_csv(path, index=False)
@@ -84,7 +84,7 @@ def write_table2_bins(merged: pd.DataFrame, labels_frame: pd.DataFrame, out_dir:
 
 
 def write_table3_continuous(merged: pd.DataFrame, path: Path) -> None:
-    metrics = ("expression_count", "page_token_count", "max_expression_token_count")
+    metrics = ("ast_tree_count", "total_ast_node_count", "max_ast_depth")
     rows = []
     for metric in metrics:
         for split in ("overall", *SPLITS):
@@ -139,7 +139,7 @@ def write_table4_ast(merged: pd.DataFrame, path: Path) -> None:
 def write_table5_structure(merged: pd.DataFrame, path: Path) -> None:
     rows = []
     overall_n = len(merged)
-    for col in ("has_frac", "has_sup", "has_sub", "has_sqrt", "has_sum", "has_env"):
+    for col in STRUCTURE_HAS_COLUMNS:
         overall_count = int(merged[col].sum())
         overall_ratio = overall_count / overall_n if overall_n else 0.0
         for split in ("overall", *SPLITS):
@@ -237,7 +237,7 @@ def write_table8_quality(
             or l.startswith("struc_cnt_")
             or l.startswith("joint_sc")
             or l.startswith("has_expr_depth_")
-            or l in {"has_frac", "has_sup", "has_sub", "has_sqrt", "has_sum", "has_env"}
+            or l in set(STRUCTURE_HAS_COLUMNS)
         ],
         "rare8": [l for l in quotas if l == "has_rare8"],
         "similar_token": [l for l in quotas if l in SIMILAR_COLS],

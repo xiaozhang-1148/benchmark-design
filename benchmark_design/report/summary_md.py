@@ -22,10 +22,11 @@ STRUCTURE_TYPE_SUMMARY_ORDER: tuple[str, ...] = (
     "上标",
     "下标",
     "根式",
-    "Env.",
-    "求和",
-    "极限",
-    "积分",
+    "Environment",
+    "大运算符及极限",
+    "重音与上下修饰",
+    "堆叠标注",
+    "包围结构",
 )
 
 STRUCTURE_TYPE_SUMMARY_LABELS: dict[str, str] = {
@@ -33,10 +34,11 @@ STRUCTURE_TYPE_SUMMARY_LABELS: dict[str, str] = {
     "上标": "Superscript",
     "下标": "Subscript",
     "根式": "Radical",
-    "求和": "Summation",
-    "积分": "Integral",
-    "Env.": "Env.",
-    "极限": "Limit",
+    "Environment": "Environment",
+    "大运算符及极限": "Big operators / limits",
+    "重音与上下修饰": "Accents",
+    "堆叠标注": "Stackrel",
+    "包围结构": "Textcircled",
 }
 
 CONTENT_KIND_SUMMARY_LABELS: dict[ExpressionContentKind, str] = {
@@ -121,7 +123,7 @@ def build_benchmark_summary_markdown(
         f"Expressions: {_fmt_int(scale.expression_count)}  ",
         f"JSON files: {_fmt_int(enriched.json_file_count)}  ",
         "Tokenizer: LATEX_DICT greedy longest-match tokenizer  ",
-        "AST metric: PosFormer max nested level  ",
+        "AST metric: structure-forest max depth  ",
         "",
         "## 1. Dataset Scale",
         "",

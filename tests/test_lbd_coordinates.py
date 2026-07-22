@@ -106,7 +106,7 @@ def test_lbd_bin_boundaries() -> None:
 
 def test_lbd_structure_types_use_fixed_table() -> None:
     tokens = ("x", "^", "{", "2", "}", "_", "{", "3", "}", r"\frac", "{", "a", "}", "{", "b", "}")
-    assert lbd_structure_types_present(tokens) == ("frac", "sub", "sup")
+    assert lbd_structure_types_present(tokens) == ("frac", "sup", "sub")
 
 
 def test_classify_lbd_all_27_positions() -> None:

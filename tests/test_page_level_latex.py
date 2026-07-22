@@ -34,7 +34,7 @@ def test_protocol_matches_hmer_tokenization_and_bins() -> None:
 
 def test_sum_and_env_structure_flags() -> None:
     sum_tokens = tokenize_latex(r"\sum_{i=1}^{n} i")
-    assert detect_structures(sum_tokens).has_sum
+    assert detect_structures(sum_tokens).has_bigop
     env_tokens = tokenize_latex(r"\begin{cases} a \\ b \end{cases}")
     assert detect_structures(env_tokens).has_env
 
@@ -86,6 +86,8 @@ def test_page_level_latex_export_smoke(tmp_path: Path) -> None:
     assert (output_dir / "figures" / "fig6_1_page_ast_scale.png").is_file()
     assert (output_dir / "figures" / "fig6_5_structure_depth_joint.png").is_file()
     assert (output_dir / "figures" / "fig6_7_rare10.png").is_file()
+    assert (output_dir / "figures" / "fig6_9_page_total_tokens.png").is_file()
+    assert (output_dir / "figures" / "fig6_10_page_distinct_tokens.png").is_file()
     assert (output_dir / "plot_data" / "fig6_1_page_ast_scale_plot_data.csv").is_file()
     summary = json.loads((output_dir / "dataset_summary.json").read_text(encoding="utf-8"))
     assert summary["valid_expression_count"] == 3

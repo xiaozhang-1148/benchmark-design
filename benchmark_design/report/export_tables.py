@@ -458,7 +458,7 @@ def write_tables_readme(output_path: Path) -> None:
         "- `punctuation_layout_token_summary.csv` — punctuation / layout token audit.",
         "- `unclassified_token_summary.csv` — unclassified taxonomy residue (header-only when empty).",
         "- `structure_type_distribution.csv` / `structure_combination_summary.csv` — structure metrics.",
-        "- `ast_depth_summary.csv` / `ast_depth_distribution.csv` — PosFormer AST depth summary and histogram source.",
+        "- `ast_depth_summary.csv` / `ast_depth_distribution.csv` — structure-forest AST depth summary and histogram source.",
         "- `expression_content_summary.csv` — pure latex_command / pure CJK / mixed expression counts.",
         "- `confusable_token_group_summary.csv` — Table 9 confusable token group metrics.",
         "- `expression_lbd_coordinate_counts.csv` — 27-cell L/B/D coordinate counts with structural difficulty tier.",

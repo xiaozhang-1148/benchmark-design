@@ -11,6 +11,18 @@ SUPERSCRIPT_TRIGGERS: frozenset[str] = frozenset({"^"})
 SUBSCRIPT_TRIGGERS: frozenset[str] = frozenset({"_"})
 SCRIPT_TRIGGERS: frozenset[str] = SUPERSCRIPT_TRIGGERS | SUBSCRIPT_TRIGGERS
 SQRT_TRIGGERS: frozenset[str] = frozenset({r"\sqrt"})
+STACKREL_TRIGGERS: frozenset[str] = frozenset({r"\stackrel"})
+TEXTCIRCLED_TRIGGERS: frozenset[str] = frozenset({r"\textcircled"})
+ACCENT_ARG_TRIGGERS: frozenset[str] = frozenset(
+    {
+        r"\vec",
+        r"\bar",
+        r"\hat",
+        r"\overline",
+        r"\widehat",
+        r"\dot",
+    }
+)
 LIMIT_OPERATOR_TRIGGERS: frozenset[str] = frozenset(
     {
         r"\sum",
@@ -25,7 +37,12 @@ LIMIT_OPERATOR_TRIGGERS: frozenset[str] = frozenset(
     }
 )
 STRUCTURE_PRIMARY_TRIGGERS: frozenset[str] = (
-    FRACTION_TRIGGERS | SQRT_TRIGGERS | LIMIT_OPERATOR_TRIGGERS
+    FRACTION_TRIGGERS
+    | SQRT_TRIGGERS
+    | LIMIT_OPERATOR_TRIGGERS
+    | ACCENT_ARG_TRIGGERS
+    | STACKREL_TRIGGERS
+    | TEXTCIRCLED_TRIGGERS
 )
 
 
@@ -138,6 +155,15 @@ def _parse_primary(stream: _TokenStream) -> None:
     if token in LIMIT_OPERATOR_TRIGGERS:
         stream.consume()
         _parse_script_suffixes(stream)
+        return
+    if token in ACCENT_ARG_TRIGGERS | TEXTCIRCLED_TRIGGERS:
+        stream.consume()
+        _parse_script_argument(stream)
+        return
+    if token in STACKREL_TRIGGERS:
+        stream.consume()
+        _parse_script_argument(stream)
+        _parse_script_argument(stream)
         return
     if token in SCRIPT_TRIGGERS:
         raise ParseError("incomplete_substructure")

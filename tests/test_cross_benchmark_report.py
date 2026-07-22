@@ -134,8 +134,8 @@ def test_cross_benchmark_comparison_markdown_structure(tmp_path: Path) -> None:
     assert "1 Structure Type" in text
     assert "Any Structure ≥1" in text
     assert "≥4 Structure Types" in text
-    assert "Env." in text
-    assert "Do **not** sum **Env.**" in text
+    assert "Environment" in text
+    assert "Do **not** sum **Environment**" in text
     assert "Multi-Struct ≥2" not in text
     assert "## 6. AST Depth Distribution" in text
     assert "## 7. Expression-level Structural Difficulty (L1–L4)" in text

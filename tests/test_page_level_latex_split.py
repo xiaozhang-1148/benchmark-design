@@ -46,20 +46,22 @@ def _write_tiny_inputs(tmp_path: Path, n: int = 40) -> Path:
         tokens = 50 + 30 * (i % 20)
         maxlen = 5 + (i % 90)
         depth = i % 6
-        has = [int((i + k) % 3 == 0) for k in range(6)]
+        has = [int((i + k) % 3 == 0) for k in range(9)]
         feature_rows.append(
             {
                 "page_id": page_id,
-                "expression_count": expr,
-                "page_token_count": tokens,
-                "max_expression_token_count": maxlen,
+                "ast_tree_count": expr,
+                "total_ast_node_count": tokens,
                 "max_ast_depth": depth,
                 "has_frac": has[0],
                 "has_sup": has[1],
                 "has_sub": has[2],
                 "has_sqrt": has[3],
-                "has_sum": has[4],
-                "has_env": has[5],
+                "has_env": has[4],
+                "has_bigop": has[5],
+                "has_accent": has[6],
+                "has_stackrel": has[7],
+                "has_textcircled": has[8],
                 "structure_type_count": sum(has),
                 "has_rare8": int(i % 7 == 0),
                 "rare8_token_count": int(i % 7 == 0) * (1 + i % 3),

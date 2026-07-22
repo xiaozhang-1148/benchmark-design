@@ -1,4 +1,4 @@
-"""AST / position-forest depth statistics for OCR LaTeX expressions."""
+"""AST depth statistics for OCR LaTeX expressions (structure-forest based)."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ from pathlib import Path
 from benchmark_design.io.benchmark_loader import ExpressionRecord
 from benchmark_design.ocr.expression_features import ExpressionFeatures
 from benchmark_design.ocr.length_distribution import percentile
-from benchmark_design.ocr.position_forest import encode_position_forest_tokens
+from benchmark_design.ocr.structure_forest import compute_ast_forest_metrics
 from benchmark_design.ocr.processing_options import ProcessingOptions
 from benchmark_design.ocr.tokenizer import build_latex_vocab, tokenize_greedy
 
-POSFORMER_COMPLEXITY_THRESHOLD = 2
+AST_DEPTH_COMPLEXITY_THRESHOLD = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,27 +44,27 @@ class OcrAstStatisticsMetrics:
         return [
             (
                 "Mean max nested level",
-                "PosFormer 结构复杂度：每个表达式 token 嵌套层级的最大值之平均",
+                "结构森林 AST 深度：每个表达式结构树最大深度之平均",
                 self.mean_max_nested_level,
             ),
             (
                 "P50 max nested level",
-                "典型表达式的 PosFormer 最大嵌套层级",
+                "典型表达式的结构森林 AST 最大深度",
                 self.p50_max_nested_level,
             ),
             (
                 "P90 max nested level",
-                "高复杂度表达式的 PosFormer 最大嵌套层级",
+                "高复杂度表达式的结构森林 AST 最大深度",
                 self.p90_max_nested_level,
             ),
             (
                 "Max max nested level",
-                "单个表达式的 PosFormer 最大嵌套层级上限",
+                "单个表达式的结构森林 AST 最大深度上限",
                 self.max_max_nested_level,
             ),
             (
                 "Mean token nested level",
-                "PosFormer 逐 token 嵌套层级的平均值",
+                "结构森林中全部结构节点深度的平均值",
                 self.mean_token_nested_level,
             ),
             (
@@ -89,7 +89,7 @@ class OcrAstStatisticsMetrics:
             ),
             (
                 "Complex expression ratio (>2)",
-                "PosFormer 定义的复杂表达式比例（max nested level > 2）",
+                "结构森林定义的复杂表达式比例（AST 深度 > 2）",
                 self.complex_expression_ratio,
             ),
         ]
@@ -100,7 +100,7 @@ def compute_max_nested_levels(expressions: Iterable[ExpressionRecord]) -> list[i
     levels: list[int] = []
     for record in expressions:
         tokens = tokenize_greedy(record.ocr, vocab)
-        levels.append(encode_position_forest_tokens(tokens).max_nested_level)
+        levels.append(compute_ast_forest_metrics(tokens).ast_depth)
     return levels
 
 
@@ -109,11 +109,7 @@ def compute_mean_token_nested_levels(expressions: Iterable[ExpressionRecord]) ->
     means: list[float] = []
     for record in expressions:
         tokens = tokenize_greedy(record.ocr, vocab)
-        encoding = encode_position_forest_tokens(tokens)
-        if not encoding.nested_levels:
-            means.append(0.0)
-        else:
-            means.append(sum(encoding.nested_levels) / len(encoding.nested_levels))
+        means.append(compute_ast_forest_metrics(tokens).mean_ast_node_depth)
     return means
 
 
@@ -183,7 +179,7 @@ def compute_ocr_ast_statistics_from_levels(
         nested_level_2_ratio=ratio_exact(2),
         nested_level_ge_3_ratio=sum(level >= 3 for level in max_levels) / expression_count,
         complex_expression_ratio=sum(
-            level > POSFORMER_COMPLEXITY_THRESHOLD for level in max_levels
+            level > AST_DEPTH_COMPLEXITY_THRESHOLD for level in max_levels
         )
         / expression_count,
         bins=bins,
@@ -196,12 +192,10 @@ def _nested_levels_from_token_sequences(
     max_levels: list[int] = []
     mean_token_levels: list[float] = []
     for tokens in token_sequences:
-        encoding = encode_position_forest_tokens(list(tokens))
-        max_levels.append(encoding.max_nested_level)
-        if encoding.nested_levels:
-            mean_token_levels.append(sum(encoding.nested_levels) / len(encoding.nested_levels))
-        else:
-            mean_token_levels.append(0.0)
+        token_list = list(tokens)
+        forest = compute_ast_forest_metrics(token_list)
+        max_levels.append(forest.ast_depth)
+        mean_token_levels.append(forest.mean_ast_node_depth)
     return max_levels, mean_token_levels
 
 
@@ -229,12 +223,9 @@ def compute_ocr_ast_statistics_from_expressions(
 
     for record in expressions:
         tokens = tokenize_greedy(record.ocr, vocab)
-        encoding = encode_position_forest_tokens(tokens)
-        max_levels.append(encoding.max_nested_level)
-        if encoding.nested_levels:
-            mean_token_levels.append(sum(encoding.nested_levels) / len(encoding.nested_levels))
-        else:
-            mean_token_levels.append(0.0)
+        forest = compute_ast_forest_metrics(tokens)
+        max_levels.append(forest.ast_depth)
+        mean_token_levels.append(forest.mean_ast_node_depth)
 
     return compute_ocr_ast_statistics_from_levels(max_levels, mean_token_levels)
 

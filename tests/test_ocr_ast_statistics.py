@@ -13,7 +13,6 @@ from benchmark_design.ocr.tokenizer import tokenize_greedy, build_latex_vocab
 from benchmark_design.report.ast_statistics_table import write_ast_statistics_report
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "sample_page.json"
-FULL_BENCHMARK = Path("/mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_1/benchmark")
 VOCAB = build_latex_vocab()
 
 
@@ -91,22 +90,3 @@ def test_write_ast_statistics_report(sample_benchmark_dir: Path, tmp_path: Path)
     assert paths["metadata"].name == "ast_depth_metadata.json"
     assert paths["metadata"].exists()
     assert "markdown" not in paths
-
-
-@pytest.mark.integration
-@pytest.mark.skipif(not FULL_BENCHMARK.is_dir(), reason="full benchmark dataset unavailable")
-def test_compute_ocr_ast_statistics_full_benchmark() -> None:
-    metrics = compute_ocr_ast_statistics(FULL_BENCHMARK)
-
-    assert metrics.expression_count == 152_113
-    assert metrics.mean_max_nested_level == pytest.approx(0.8499405047563324)
-    assert metrics.p50_max_nested_level == pytest.approx(1.0)
-    assert metrics.p90_max_nested_level == pytest.approx(2.0)
-    assert metrics.max_max_nested_level == 5
-    assert metrics.mean_token_nested_level == pytest.approx(0.4206241273175806)
-    assert metrics.nested_level_0_ratio == pytest.approx(0.3490037011958215)
-    assert metrics.nested_level_1_ratio == pytest.approx(0.47350325087270645)
-    assert metrics.nested_level_2_ratio == pytest.approx(0.1567518883987562)
-    assert metrics.nested_level_ge_3_ratio == pytest.approx(0.02074115953271581)
-    assert metrics.complex_expression_ratio == pytest.approx(0.02074115953271581)
-    assert sum(item.count for item in metrics.bins) == 152_113

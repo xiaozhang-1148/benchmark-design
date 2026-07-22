@@ -410,7 +410,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ast_parser = ocr_sub.add_parser(
         "ast",
-        help="Compute PosFormer position-forest AST depth statistics",
+        help="Compute structure-forest AST depth statistics",
     )
     ast_parser.add_argument(
         "--input",

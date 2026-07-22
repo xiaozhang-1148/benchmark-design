@@ -446,7 +446,7 @@ def write_ast_depth_histogram(features: list[ExpressionFeatures], output_path: P
 
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.bar(depths, counts, width=0.85, color="#4472C4", edgecolor="white")
-    ax.set_xlabel("AST depth (PosFormer max nested level)")
+    ax.set_xlabel("AST depth (structure-forest max depth)")
     ax.set_ylabel("Expression count")
     ax.set_title("AST Depth Histogram")
     ax.set_xticks(depths)

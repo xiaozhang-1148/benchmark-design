@@ -19,6 +19,8 @@ from benchmark_design.page_level_latex.plot_data import (
     build_fig6_6_distinct_token_plot_data,
     build_fig6_7_plot_data,
     build_fig6_8_plot_data,
+    build_fig6_9_plot_data,
+    build_fig6_10_plot_data,
     total_pages,
 )
 from benchmark_design.page_level_latex.plot_style import (
@@ -69,7 +71,7 @@ def _save_fig6_1(
 
     apply_chapter6_style(plt)
     plot_data = build_fig6_1_plot_data(page_rows)
-    fig, axes = plt.subplots(1, 3, figsize=(16, 4.8))
+    fig, axes = plt.subplots(1, 3, figsize=(18, 4.8))
     metrics = (
         ("ast_tree_count", "AST trees per page", COLOR_PAGE_COUNT),
         ("total_ast_node_count", "AST nodes per page", COLOR_PAGE_COVERAGE),
@@ -96,7 +98,7 @@ def _save_fig6_1(
         ax.set_title(title)
         ax.set_xlabel(field)
         ax.set_ylabel("Pages")
-        ax.tick_params(axis="x", rotation=20)
+        ax.tick_params(axis="x", rotation=25 if field == "total_ast_node_count" else 20)
         enable_horizontal_grid_only(ax)
 
     fig.suptitle("Figure 6-1 Page AST scale distribution")
@@ -104,7 +106,7 @@ def _save_fig6_1(
     return _finalize_figure(fig, figure_stem=figure_stem, csv_path=csv_path, plot_data=plot_data)
 
 
-def _grouped_depth_bars(ax, frame, depths: list[int], *, title: str) -> None:
+def _grouped_depth_bars(ax, frame, depths: list[int], *, title: str, show_bar_labels: bool = True) -> None:
     labels = [str(d) for d in depths]
     x = np.arange(len(depths))
     width = 0.36
@@ -113,18 +115,19 @@ def _grouped_depth_bars(ax, frame, depths: list[int], *, title: str) -> None:
     mx = [sub.loc[d, "max_depth_page_ratio"] * 100 for d in depths]
     bars_cov = ax.bar(x - width / 2, cov, width, label="Page coverage", color=COLOR_PAGE_COVERAGE)
     bars_max = ax.bar(x + width / 2, mx, width, label="Page max AST depth", color=COLOR_PAGE_MAX)
-    annotate_bars_dual(
-        ax,
-        bars_cov,
-        [int(sub.loc[d, "coverage_page_count"]) for d in depths],
-        [float(sub.loc[d, "coverage_page_ratio"]) for d in depths],
-    )
-    annotate_bars_dual(
-        ax,
-        bars_max,
-        [int(sub.loc[d, "max_depth_page_count"]) for d in depths],
-        [float(sub.loc[d, "max_depth_page_ratio"]) for d in depths],
-    )
+    if show_bar_labels:
+        annotate_bars_dual(
+            ax,
+            bars_cov,
+            [int(sub.loc[d, "coverage_page_count"]) for d in depths],
+            [float(sub.loc[d, "coverage_page_ratio"]) for d in depths],
+        )
+        annotate_bars_dual(
+            ax,
+            bars_max,
+            [int(sub.loc[d, "max_depth_page_count"]) for d in depths],
+            [float(sub.loc[d, "max_depth_page_ratio"]) for d in depths],
+        )
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_xlabel("AST depth")
@@ -151,6 +154,7 @@ def _save_fig6_3(
         plot_data,
         [0, 1, 2, 3, 4, 5],
         title="Figure 6-3 Page coverage and page max AST depth by depth",
+        show_bar_labels=False,
     )
     fig.tight_layout()
     return _finalize_figure(fig, figure_stem=figure_stem, csv_path=csv_path, plot_data=plot_data)
@@ -166,8 +170,12 @@ def _save_fig6_4(
 
     apply_chapter6_style(plt)
     plot_data = build_fig6_4_plot_data(page_rows)
-    cov = plot_data[plot_data["data_type"] == "structure_coverage"]
-    typ = plot_data[plot_data["data_type"] == "structure_type_count"]
+    cov = plot_data[plot_data["data_type"] == "structure_coverage"].sort_values(
+        "page_ratio", ascending=False
+    )
+    typ = plot_data[
+        (plot_data["data_type"] == "structure_type_count") & (plot_data["category"] != "9")
+    ]
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.2))
     bars = axes[0].bar(cov["category"], cov["page_ratio"] * 100, color=COLOR_PAGE_COVERAGE)
     annotate_bars_dual(axes[0], bars, cov["page_count"], cov["page_ratio"])
@@ -339,19 +347,17 @@ def _save_fig6_7(
     fig, ax = plt.subplots(figsize=(9, 5.2))
     if len(plot_data):
         bars = ax.bar(
-            plot_data["rare8_occurrence_count"].astype(str),
+            plot_data["occurrence_bin"],
             plot_data["page_count"],
             color=COLOR_RARE10,
         )
-        annotate_bars_dual(
-            ax,
-            bars,
-            plot_data["page_count"],
-            plot_data["page_ratio_among_rare8_pages"],
-        )
-    ax.set_xlabel("Rare-8 token occurrences")
+        annotate_bars_dual(ax, bars, plot_data["page_count"], plot_data["page_ratio"])
+    ax.set_xlabel("Rare-token instances per page (corpus frequency ≤ 8)")
     ax.set_ylabel("Pages")
-    ax.set_title("Figure 6-7 Rare-8 (rarest 8%) token occurrence distribution")
+    ax.set_title(
+        "Figure 6-7 Rare-vocabulary token load per page\n"
+        "(token instances from types that appear at most 8 times in the corpus)"
+    )
     enable_horizontal_grid_only(ax)
     fig.tight_layout()
     return _finalize_figure(fig, figure_stem=figure_stem, csv_path=csv_path, plot_data=plot_data)
@@ -384,6 +390,79 @@ def _save_fig6_8(group_summary, figure_stem: Path, csv_path: Path) -> dict[str, 
     enable_horizontal_grid_only(ax)
     fig.tight_layout()
     return _finalize_figure(fig, figure_stem=figure_stem, csv_path=csv_path, plot_data=plot_data)
+
+
+def _save_page_token_count_figure(
+    page_rows: Sequence[PageLatexMetricsRow],
+    *,
+    field: str,
+    plot_data,
+    title: str,
+    suptitle: str,
+    xlabel: str,
+    color: str,
+    figure_stem: Path,
+    csv_path: Path,
+    x_rotation: int = 20,
+) -> dict[str, Path]:
+    import matplotlib.pyplot as plt
+
+    apply_chapter6_style(plt)
+    values = np.array([getattr(row, field) for row in page_rows], dtype=np.float64)
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    bars = ax.bar(plot_data["bin_label"], plot_data["page_count"], color=color, edgecolor="white")
+    annotate_bars_dual(ax, bars, plot_data["page_count"], plot_data["page_ratio"])
+    if values.size:
+        add_stats_box(ax, vmin=float(values.min()), vmean=float(values.mean()), vmax=float(values.max()))
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Pages")
+    ax.tick_params(axis="x", rotation=x_rotation)
+    enable_horizontal_grid_only(ax)
+    fig.suptitle(suptitle)
+    fig.tight_layout()
+    return _finalize_figure(fig, figure_stem=figure_stem, csv_path=csv_path, plot_data=plot_data)
+
+
+@with_locked_pyplot
+def _save_fig6_9(
+    page_rows: Sequence[PageLatexMetricsRow],
+    figure_stem: Path,
+    csv_path: Path,
+) -> dict[str, Path]:
+    plot_data = build_fig6_9_plot_data(page_rows)
+    return _save_page_token_count_figure(
+        page_rows,
+        field="total_token_count",
+        plot_data=plot_data,
+        title="Total tokens per page",
+        suptitle="Figure 6-9 Total token count per page",
+        xlabel="total_token_count",
+        color=COLOR_PAGE_COUNT,
+        figure_stem=figure_stem,
+        csv_path=csv_path,
+        x_rotation=25,
+    )
+
+
+@with_locked_pyplot
+def _save_fig6_10(
+    page_rows: Sequence[PageLatexMetricsRow],
+    figure_stem: Path,
+    csv_path: Path,
+) -> dict[str, Path]:
+    plot_data = build_fig6_10_plot_data(page_rows)
+    return _save_page_token_count_figure(
+        page_rows,
+        field="distinct_token_count",
+        plot_data=plot_data,
+        title="Distinct tokens per page",
+        suptitle="Figure 6-10 Distinct token count per page",
+        xlabel="distinct_token_count",
+        color=COLOR_PAGE_COVERAGE,
+        figure_stem=figure_stem,
+        csv_path=csv_path,
+    )
 
 
 def export_page_latex_figures(
@@ -442,6 +521,22 @@ def export_page_latex_figures(
             rare_tokens=rare_tokens or set(),
             figure_stem=figures_dir / "fig6_7_rare10",
             csv_path=plot_data_dir / "fig6_7_rare10_occurrence_distribution.csv",
+        ),
+    )
+    record(
+        "fig6_9_page_total_tokens",
+        _save_fig6_9(
+            page_rows,
+            figures_dir / "fig6_9_page_total_tokens",
+            plot_data_dir / "fig6_9_page_total_token_distribution.csv",
+        ),
+    )
+    record(
+        "fig6_10_page_distinct_tokens",
+        _save_fig6_10(
+            page_rows,
+            figures_dir / "fig6_10_page_distinct_tokens",
+            plot_data_dir / "fig6_10_page_distinct_token_distribution.csv",
         ),
     )
 

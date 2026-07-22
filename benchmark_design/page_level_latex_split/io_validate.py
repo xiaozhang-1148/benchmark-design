@@ -16,15 +16,17 @@ STRUCTURE_HAS_COLUMNS = (
     "has_sup",
     "has_sub",
     "has_sqrt",
-    "has_sum",
     "has_env",
+    "has_bigop",
+    "has_accent",
+    "has_stackrel",
+    "has_textcircled",
 )
 
 REQUIRED_FEATURE_COLUMNS = (
     "page_id",
-    "expression_count",
-    "page_token_count",
-    "max_expression_token_count",
+    "ast_tree_count",
+    "total_ast_node_count",
     "max_ast_depth",
     *STRUCTURE_HAS_COLUMNS,
     "structure_type_count",
@@ -109,9 +111,8 @@ def load_and_validate_inputs(inputs_dir: Path, config: SplitConfig) -> SplitInpu
 
     # Numeric ranges and structure identity
     for col in (
-        "expression_count",
-        "page_token_count",
-        "max_expression_token_count",
+        "ast_tree_count",
+        "total_ast_node_count",
         "max_ast_depth",
         "structure_type_count",
         "rare8_token_count",
@@ -170,7 +171,7 @@ def load_and_validate_inputs(inputs_dir: Path, config: SplitConfig) -> SplitInpu
 
     # Token table pages must cover pages with tokens
     token_pages = set(token_counts["page_id"].astype(str)) if not token_counts.empty else set()
-    zero_expr = set(features.loc[features["expression_count"] == 0, "page_id"].astype(str))
+    zero_expr = set(features.loc[features["ast_tree_count"] == 0, "page_id"].astype(str))
     unexpected = (manifest_ids - token_pages) - zero_expr
     if unexpected:
         raise ValueError(f"pages with expressions but no token rows: {sorted(unexpected)[:10]}")

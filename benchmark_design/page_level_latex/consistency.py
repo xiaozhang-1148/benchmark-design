@@ -28,12 +28,12 @@ CHAPTER5_EXPECTED: dict[str, float | int] = {
     "length_21_40": 49_066,
     "length_41_80": 17_699,
     "length_gt80": 2_380,
-    "ast_depth_0": 53_052,
-    "ast_depth_1": 71_972,
-    "ast_depth_2": 23_834,
-    "ast_depth_3": 3_049,
-    "ast_depth_4": 102,
-    "ast_depth_5": 3,
+    "ast_depth_0": 49_918,
+    "ast_depth_1": 74_115,
+    "ast_depth_2": 24_545,
+    "ast_depth_3": 3_252,
+    "ast_depth_4": 174,
+    "ast_depth_5": 8,
     "page_count": 9_911,
 }
 
@@ -115,9 +115,11 @@ def check_page_invariants(
         errors.append("sum(page.ast_tree_count) != valid_expression_count")
     if sum(row.total_ast_node_count for row in page_rows) != sum(row.ast_node_count for row in valid):
         errors.append("sum(page.total_ast_node_count) != sum(expression.ast_node_count)")
+    if sum(row.total_token_count for row in page_rows) != sum(row.token_count for row in valid):
+        errors.append("sum(page.total_token_count) != sum(expression.token_count)")
 
     for page in page_rows:
-        if not (0 <= page.distinct_structure_type_count <= 6):
+        if not (0 <= page.distinct_structure_type_count <= len(STRUCTURE_TYPE_ORDER)):
             errors.append(f"{page.image_id}: distinct_structure_type_count out of range")
             break
         if page.ast_tree_count == 0:
@@ -145,7 +147,7 @@ def check_page_invariants(
 
     structure_type_sum = sum(
         Counter(page.distinct_structure_type_count for page in page_rows).get(v, 0)
-        for v in range(0, 7)
+        for v in range(0, len(STRUCTURE_TYPE_ORDER) + 1)
     )
     if structure_type_sum != page_count:
         errors.append("structure type count pages do not sum to page_count")
@@ -153,7 +155,7 @@ def check_page_invariants(
     joint_sum = sum(
         1
         for page in page_rows
-        if 0 <= page.distinct_structure_type_count <= 6 and 0 <= page.max_ast_depth <= 5
+        if 0 <= page.distinct_structure_type_count <= len(STRUCTURE_TYPE_ORDER) and 0 <= page.max_ast_depth <= 5
     )
     if joint_sum != page_count and all(page.max_ast_depth <= 5 for page in page_rows):
         errors.append("structure-depth joint cells do not sum to page_count")

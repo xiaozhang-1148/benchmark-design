@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from benchmark_design.io.benchmark_loader import ExpressionRecord
-from benchmark_design.ocr.matrix_environments import (
-    MATRIX_ENVIRONMENT_NAMES,
-    MATRIX_STRUCTURE_TRIGGER_TOKENS,
-    expression_has_matrix_environment,
-    matrix_environment_stats,
-)
+from benchmark_design.ocr.matrix_environments import MATRIX_STRUCTURE_TRIGGER_TOKENS
 from benchmark_design.ocr.processing_options import ProcessingOptions
+from benchmark_design.ocr.structure_forest import (
+    AST_STRUCTURE_SPECS,
+    compute_ast_forest_metrics,
+    max_structure_depth_for_type,
+)
 from benchmark_design.ocr.token_taxonomy import TokenCategory, classify_token
 from benchmark_design.ocr.tokenizer import build_latex_vocab, tokenize_greedy
 
@@ -25,72 +25,57 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class StructureTypeSpec:
+    structure_tier: str
     structure_type: str
     trigger_tokens: str
     triggers: frozenset[str]
+    structure_id: str
 
 
-STRUCTURE_TYPES: tuple[StructureTypeSpec, ...] = (
-    StructureTypeSpec("分式", r"\frac", frozenset({r"\frac", r"\dfrac", r"\tfrac", r"\cfrac"})),
-    StructureTypeSpec("上标", "^", frozenset({"^"})),
-    StructureTypeSpec("下标", "_", frozenset({"_"})),
-    StructureTypeSpec("根式", r"\sqrt", frozenset({r"\sqrt"})),
-    StructureTypeSpec("求和", r"\sum", frozenset({r"\sum"})),
+STRUCTURE_TYPES: tuple[StructureTypeSpec, ...] = tuple(
     StructureTypeSpec(
-        "积分",
-        r"\int",
-        frozenset({r"\int", r"\iint", r"\iiint", r"\iiiint", r"\oint"}),
-    ),
-    StructureTypeSpec(
-        "Env.",
-        MATRIX_STRUCTURE_TRIGGER_TOKENS,
-        MATRIX_ENVIRONMENT_NAMES,
-    ),
-    StructureTypeSpec("极限", r"\lim", frozenset({r"\lim", r"\limsup", r"\liminf"})),
+        "核心结构" if spec.structure_tier == "core" else "扩展结构",
+        spec.display_name,
+        spec.trigger_tokens,
+        spec.triggers,
+        spec.structure_type,
+    )
+    for spec in AST_STRUCTURE_SPECS
 )
 
-MATRIX_STRUCTURE_TYPE = "Env."
-MATRIX_STRUCTURE_REPORT_COLUMN = "Env."
-
-
-def _trigger_brace_depth(tokens: list[str], triggers: frozenset[str]) -> int:
-    """Generic depth: each trigger opens a layer; ``}`` closes one layer."""
-    depth = 0
-    max_depth = 0
-    for token in tokens:
-        if token in triggers:
-            depth += 1
-            max_depth = max(max_depth, depth)
-        elif token == "}":
-            depth = max(0, depth - 1)
-    return max_depth
+MATRIX_STRUCTURE_TYPE = "Environment"
+MATRIX_STRUCTURE_REPORT_COLUMN = MATRIX_STRUCTURE_TYPE
 
 
 def max_structure_depth(tokens: list[str], spec: StructureTypeSpec) -> int:
-    if spec.structure_type == MATRIX_STRUCTURE_TYPE:
-        return matrix_environment_stats(tokens).max_depth
-    return _trigger_brace_depth(tokens, spec.triggers)
+    return max_structure_depth_for_type(tokens, spec.structure_id)
 
 
 def _structure_type_present(tokens: list[str], spec: StructureTypeSpec) -> bool:
-    if spec.structure_type == MATRIX_STRUCTURE_TYPE:
-        return expression_has_matrix_environment(tokens)
-    return any(token in spec.triggers for token in tokens)
+    metrics = compute_ast_forest_metrics(tokens)
+    return metrics.structure_flags.get(spec.structure_id, False)
 
 
 def _structure_occurrence_count(tokens: list[str], spec: StructureTypeSpec) -> int:
-    if spec.structure_type == MATRIX_STRUCTURE_TYPE:
+    if spec.structure_id == "env":
+        from benchmark_design.ocr.matrix_environments import matrix_environment_stats
+
         return matrix_environment_stats(tokens).count
     return sum(1 for token in tokens if token in spec.triggers)
 
 
 def count_structure_types_in_tokens(tokens: list[str]) -> int:
-    """Return how many distinct table-6 structure types appear in *tokens*."""
-    return sum(1 for spec in STRUCTURE_TYPES if _structure_type_present(tokens, spec))
+    """Return how many distinct AST structure types appear in *tokens*."""
+    return compute_ast_forest_metrics(tokens).structure_type_count
 
 
 def structure_types_present_in_tokens(tokens: list[str]) -> frozenset[str]:
-    return frozenset(spec.structure_type for spec in STRUCTURE_TYPES if _structure_type_present(tokens, spec))
+    metrics = compute_ast_forest_metrics(tokens)
+    return frozenset(
+        spec.structure_type
+        for spec in STRUCTURE_TYPES
+        if metrics.structure_flags.get(spec.structure_id, False)
+    )
 
 
 @dataclass(frozen=True, slots=True)
