@@ -1,4 +1,4 @@
-"""Representation validity diagnostics (collapse, norms, technical confounders)."""
+"""Representation validity diagnostics with multi-PC technical confounder alerts."""
 
 from __future__ import annotations
 
@@ -11,9 +11,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.stats import spearmanr
 from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
 
 from ..utils import atomic_write_json, ensure_dir
+from .io_util import atomic_write_parquet, load_aligned_embeddings, stamp_run_id, write_run_meta
 
 
 def _save(fig, path: Path, dpi: int = 150) -> None:
@@ -23,65 +26,56 @@ def _save(fig, path: Path, dpi: int = 150) -> None:
 
 
 def load_embeddings(cfg: dict[str, Any]) -> tuple[np.ndarray, pd.DataFrame]:
-    emb_dir = Path(cfg["paths"]["embeddings_dir"])
-    meta_dir = Path(cfg["paths"]["metadata_dir"])
-    name = (cfg.get("extract") or {}).get("save_name", "deepseek_ocr2_mean_l2.npy")
-    X = np.load(emb_dir / name)
-    idx = pd.read_parquet(meta_dir / "embedding_index.parquet")
-    idx = idx[idx["status"] == "ok"].sort_values("embedding_row").reset_index(drop=True)
-    # align
-    rows = idx["embedding_row"].to_numpy()
-    if len(rows) == len(X) and np.array_equal(rows, np.arange(len(X))):
-        return X.astype(np.float32), idx
-    return X[rows].astype(np.float32), idx.reset_index(drop=True)
+    X, idx, _ = load_aligned_embeddings(cfg)
+    return X, idx
 
 
 def run_diagnostics(cfg: dict[str, Any]) -> dict[str, Any]:
     diag = Path(cfg["paths"]["diagnostics_dir"])
     dpi = int(cfg["analysis"].get("figure_dpi", 150))
     seed = int(cfg.get("random_seed", 42))
-    X, idx = load_embeddings(cfg)
+    rho_thr = float(cfg["analysis"].get("confound_rho_threshold", 0.5))
+
+    X, idx, emb_sha = load_aligned_embeddings(cfg)
     n, d = X.shape
     man = pd.read_parquet(Path(cfg["paths"]["metadata_dir"]) / "manifest.parquet")
-    man = man.set_index("image_id")
+    man = man.copy()
+    man.index = man["image_id"].astype(str)
 
     nan_inf = int((~np.isfinite(X)).sum())
-    # duplicate vectors
-    # hash rounded floats
     rounded = np.round(X, 6)
     uniq = np.unique(rounded, axis=0).shape[0]
     n_dup_groups = n - uniq
 
-    norms = idx["norm_before_l2"].to_numpy(dtype=np.float64) if "norm_before_l2" in idx.columns else np.linalg.norm(X, axis=1)
-    tokens = idx["token_count"].to_numpy(dtype=np.float64) if "token_count" in idx.columns else None
+    norms = (
+        idx["norm_before_l2"].to_numpy(dtype=np.float64)
+        if "norm_before_l2" in idx.columns
+        else np.linalg.norm(X, axis=1)
+    )
 
     rng = np.random.default_rng(seed)
     sample_n = min(int(cfg["analysis"].get("similarity_sample", 2000)), n)
     sample_idx = rng.choice(n, size=sample_n, replace=False)
     Xs = X[sample_idx]
-    # pairwise cosine among random pairs
     sims = []
     for _ in range(min(5000, sample_n * 2)):
         i, j = rng.choice(sample_n, size=2, replace=False)
         sims.append(float(np.dot(Xs[i], Xs[j])))
     sims = np.asarray(sims)
 
-    # kNN distances (k=1 excluding self) on sample
-    from sklearn.neighbors import NearestNeighbors
-
     nn = NearestNeighbors(n_neighbors=2, metric="cosine")
     nn.fit(Xs)
     dist, _ = nn.kneighbors(Xs)
     nn1 = dist[:, 1]
 
-    # PCA variance + effective rank via covariance eigenvalues
-    pca = PCA(n_components=min(50, n - 1, d), random_state=seed)
+    n_pc = min(50, n - 1, d)
+    pca = PCA(n_components=n_pc, random_state=seed)
     coords = pca.fit_transform(X)
     cum = np.cumsum(pca.explained_variance_ratio_)
-    # effective rank
     ev = pca.explained_variance_
     p = ev / ev.sum()
     eff_rank = float(np.exp(-np.sum(p * np.log(p + 1e-12))))
+    dims_80 = int(np.searchsorted(cum, 0.80) + 1)
 
     # plots
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -98,42 +92,93 @@ def run_diagnostics(cfg: dict[str, Any]) -> dict[str, Any]:
 
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(np.arange(1, len(cum) + 1), cum, color="#1f4e79")
-    ax.axhline(0.95, color="gray", linestyle=":")
+    ax.axhline(0.8, color="gray", linestyle=":")
+    ax.axhline(0.95, color="gray", linestyle="--")
     ax.set_ylim(0, 1.02)
     ax.set_title("PCA cumulative explained variance")
     _save(fig, diag / "pca_variance.png", dpi)
 
-    # technical confounders vs PC1/PC2
     ids = idx["image_id"].astype(str).tolist()
-    audit = {
-        "pc1": coords[:, 0],
-        "pc2": coords[:, 1],
-        "token_count": [man.loc[i, "token_count"] if i in man.index else np.nan for i in ids],
-        "aspect_ratio": [man.loc[i, "aspect_ratio"] if i in man.index else np.nan for i in ids],
-        "width": [man.loc[i, "width"] if i in man.index else np.nan for i in ids],
-        "file_size": [man.loc[i, "file_size"] if i in man.index else np.nan for i in ids],
-        "n_local_patches": [man.loc[i, "n_local_patches"] if i in man.index else np.nan for i in ids],
+
+    def _col(name: str) -> np.ndarray:
+        if name in idx.columns:
+            return pd.to_numeric(idx[name], errors="coerce").to_numpy(dtype=np.float64)
+        vals = []
+        for i in ids:
+            if i in man.index:
+                vals.append(man.loc[i, name] if name in man.columns else np.nan)
+            else:
+                vals.append(np.nan)
+        return pd.to_numeric(pd.Series(vals), errors="coerce").to_numpy(dtype=np.float64)
+
+    tech_vars = {
+        "token_count": _col("token_count"),
+        "n_local_patches": _col("n_local_patches"),
+        "aspect_ratio": _col("aspect_ratio"),
+        "width": _col("width"),
+        "height": _col("height"),
+        "file_size": _col("file_size"),
+        "norm_before_l2": norms.astype(np.float64),
     }
-    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-    for ax, key in zip(axes.ravel(), ["token_count", "aspect_ratio", "width", "n_local_patches"]):
-        vals = pd.to_numeric(pd.Series(audit[key]), errors="coerce").to_numpy()
-        sc = ax.scatter(audit["pc1"], audit["pc2"], c=vals, s=6, cmap="viridis", linewidths=0, alpha=0.7)
+
+    # PCs to check: PC1–PC10 and all PCs within 80% cumulative variance
+    pc_indices = sorted(set(range(min(10, n_pc))) | set(range(dims_80)))
+    alerts: list[dict[str, Any]] = []
+    confound_matrix: dict[str, dict[str, float]] = {}
+    for pi in pc_indices:
+        pc_name = f"PC{pi + 1}"
+        confound_matrix[pc_name] = {}
+        pc_vals = coords[:, pi]
+        for tname, tvals in tech_vars.items():
+            mask = np.isfinite(tvals) & np.isfinite(pc_vals)
+            if mask.sum() < 10:
+                continue
+            # skip constant tech vars (e.g. token_count all 256)
+            if np.nanstd(tvals[mask]) < 1e-12:
+                continue
+            rho, _ = spearmanr(tvals[mask], pc_vals[mask])
+            rho_f = float(rho)
+            confound_matrix[pc_name][tname] = rho_f
+            if abs(rho_f) >= rho_thr:
+                alerts.append(
+                    {
+                        "pc": pc_name,
+                        "variable": tname,
+                        "spearman_rho": rho_f,
+                        "threshold": rho_thr,
+                        "severity": float(pca.explained_variance_ratio_[pi]),
+                    }
+                )
+
+    fig, axes = plt.subplots(2, 3, figsize=(14, 8))
+    plot_keys = ["token_count", "aspect_ratio", "width", "file_size", "n_local_patches", "norm_before_l2"]
+    for ax, key in zip(axes.ravel(), plot_keys):
+        vals = tech_vars[key]
+        sc = ax.scatter(coords[:, 0], coords[:, 1], c=vals, s=6, cmap="viridis", linewidths=0, alpha=0.7)
         fig.colorbar(sc, ax=ax, fraction=0.046)
-        ax.set_title(f"PCA colored by {key}")
+        ax.set_title(f"PCA by {key}")
     _save(fig, diag / "technical_confounders.png", dpi)
 
-    # Spearman of audit vars with PC1
-    from scipy.stats import spearmanr
-
-    confound_corr = {}
-    for key in ["token_count", "aspect_ratio", "width", "file_size", "n_local_patches"]:
-        vals = pd.to_numeric(pd.Series(audit[key]), errors="coerce").to_numpy()
-        mask = np.isfinite(vals) & np.isfinite(audit["pc1"])
-        if mask.sum() > 10:
-            rho, _ = spearmanr(vals[mask], np.asarray(audit["pc1"])[mask])
-            confound_corr[key] = float(rho)
+    # heatmap of |rho| for PC1-10 x tech
+    heat_pcs = [f"PC{i+1}" for i in range(min(10, n_pc))]
+    heat_vars = list(tech_vars.keys())
+    mat = np.zeros((len(heat_pcs), len(heat_vars)))
+    for i, pc in enumerate(heat_pcs):
+        for j, tv in enumerate(heat_vars):
+            mat[i, j] = abs(confound_matrix.get(pc, {}).get(tv, np.nan))
+    fig, ax = plt.subplots(figsize=(9, 5))
+    im = ax.imshow(np.nan_to_num(mat, nan=0.0), aspect="auto", cmap="magma", vmin=0, vmax=1)
+    ax.set_xticks(range(len(heat_vars)))
+    ax.set_xticklabels(heat_vars, rotation=30, ha="right")
+    ax.set_yticks(range(len(heat_pcs)))
+    ax.set_yticklabels(heat_pcs)
+    ax.set_title(f"|Spearman ρ| tech confounders (alert ≥ {rho_thr})")
+    fig.colorbar(im, ax=ax)
+    _save(fig, diag / "confounder_rho_heatmap.png", dpi)
 
     summary = {
+        "run_id": cfg["run_id"],
+        "embedding_sha256": emb_sha,
         "n": int(n),
         "dim": int(d),
         "nan_inf_count": nan_inf,
@@ -144,25 +189,34 @@ def run_diagnostics(cfg: dict[str, Any]) -> dict[str, Any]:
         "pairwise_cosine_p95": float(np.percentile(sims, 95)),
         "nn1_cosine_distance_mean": float(nn1.mean()),
         "nn1_cosine_distance_p50": float(np.median(nn1)),
+        "pca_dims_80": dims_80,
         "pca_dims_95": int(np.searchsorted(cum, 0.95) + 1),
         "pca_pc1_variance": float(pca.explained_variance_ratio_[0]),
         "effective_rank_top50": eff_rank,
-        "confound_spearman_pc1": confound_corr,
+        "confound_rho_threshold": rho_thr,
+        "confound_matrix": confound_matrix,
+        "confound_alerts": alerts,
+        "confound_alert_count": len(alerts),
         "collapse_warning": bool(sims.mean() > 0.95),
-        "token_count_dominated_warning": bool(abs(confound_corr.get("token_count", 0)) > 0.7),
     }
-    atomic_write_json(diag / "extraction_summary.json", {**(json_load_existing(diag / "extraction_summary.json")), **summary})
     atomic_write_json(diag / "diagnostics_summary.json", summary)
-    print(f"[diagnostics] n={n} dim={d} cos_mean={summary['pairwise_cosine_mean']:.3f} collapse={summary['collapse_warning']}")
-    return summary
+    atomic_write_json(diag / "confound_alerts.json", {"alerts": alerts, "threshold": rho_thr})
+    # merge into extraction_summary if present
+    prev = {}
+    ep = diag / "extraction_summary.json"
+    if ep.exists():
+        import json
 
-
-def json_load_existing(path: Path) -> dict:
-    import json
-
-    if path.exists():
         try:
-            return json.loads(path.read_text())
+            prev = json.loads(ep.read_text())
         except Exception:
-            return {}
-    return {}
+            prev = {}
+    atomic_write_json(ep, {**prev, **{k: summary[k] for k in ("n", "dim", "embedding_sha256", "run_id", "confound_alert_count")}})
+    write_run_meta(cfg, stage="diagnostics_done", embedding_sha256=emb_sha, confound_alert_count=len(alerts))
+    print(
+        f"[diagnostics] n={n} dim={d} cos_mean={summary['pairwise_cosine_mean']:.3f} "
+        f"confound_alerts={len(alerts)}"
+    )
+    for a in alerts[:12]:
+        print(f"  ALERT {a['variable']}–{a['pc']} ρ={a['spearman_rho']:.3f}")
+    return summary

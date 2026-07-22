@@ -16,7 +16,7 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 
 from ..utils import ensure_dir
-from .diagnostics import load_embeddings
+from .io_util import atomic_write_parquet, load_aligned_embeddings, stamp_run_id
 
 try:
     import umap as umap_lib
@@ -38,8 +38,9 @@ def run_projections(cfg: dict[str, Any]) -> dict[str, Any]:
     gal = Path(cfg["paths"]["galleries_dir"]) / "nearest_neighbors"
     dpi = int(cfg["analysis"].get("figure_dpi", 150))
     seed = int(cfg.get("random_seed", 42))
-    X, idx = load_embeddings(cfg)
+    X, idx, emb_sha = load_aligned_embeddings(cfg)
     n, d = X.shape
+    run_id = str(cfg["run_id"])
     man = pd.read_parquet(Path(cfg["paths"]["metadata_dir"]) / "manifest.parquet")
     id_to_path = dict(zip(man["image_id"].astype(str), man["image_path"].astype(str)))
 
@@ -61,7 +62,8 @@ def run_projections(cfg: dict[str, Any]) -> dict[str, Any]:
         elif c in man.columns:
             m = man.set_index("image_id")
             pca_df[c] = pca_df["image_id"].map(m[c].to_dict())
-    pca_df.to_parquet(proj / "pca_coordinates.parquet", index=False)
+    pca_df = stamp_run_id(pca_df, run_id)
+    atomic_write_parquet(pca_df, proj / "pca_coordinates.parquet")
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     axes[0].scatter(Z[:, 0], Z[:, 1], s=4, alpha=0.5, linewidths=0, c="#1f4e79")
@@ -99,7 +101,8 @@ def run_projections(cfg: dict[str, Any]) -> dict[str, Any]:
     for c in ("token_count", "aspect_ratio"):
         if c in pca_df.columns:
             umap_df[c] = pca_df[c]
-    umap_df.to_parquet(proj / "umap_coordinates.parquet", index=False)
+    umap_df = stamp_run_id(umap_df, run_id)
+    atomic_write_parquet(umap_df, proj / "umap_coordinates.parquet")
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
     axes[0].hexbin(U[:, 0], U[:, 1], gridsize=70, cmap="magma", mincnt=1)
@@ -127,7 +130,13 @@ def run_projections(cfg: dict[str, Any]) -> dict[str, Any]:
         gal / "random_queries",
         neighbors=k,
     )
-    return {"pca_dims": int(k), "umap_n": int(n), "pca_dims_95": int(np.searchsorted(cum, 0.95) + 1)}
+    return {
+        "run_id": run_id,
+        "embedding_sha256": emb_sha,
+        "pca_dims": int(k),
+        "umap_n": int(n),
+        "pca_dims_95": int(np.searchsorted(cum, 0.95) + 1),
+    }
 
 
 def _write_nn_gallery(

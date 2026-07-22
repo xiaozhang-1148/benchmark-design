@@ -38,7 +38,9 @@ def run_verify(cfg: dict[str, Any]) -> dict[str, Any]:
 
     # Batch vs single consistency on a few (sequential encode already)
     report = {
+        "run_id": cfg.get("run_id"),
         "method": extractor.method_name,
+        "use_local_patches": bool(cfg.get("use_local_patches", False)),
         "first_image": {
             "shapes": out0["shapes"],
             "token_count": out0["token_count"],

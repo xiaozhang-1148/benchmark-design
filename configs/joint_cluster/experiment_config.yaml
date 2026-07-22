@@ -1,0 +1,40 @@
+# Joint clustering: DeepSeek-OCR2 embedding + 5 GT features → K-Means
+#
+# Input: images_folder GT JSON + existing visual-embedding run
+# Output: experiment_output tree under output_root
+
+random_state: 42
+
+paths:
+  images_dir: "/mnt/nvme_user/baoquan/Label_Data/images_folder"
+  embedding_run_dir: "/home/baoquan/benchmark/deepseek/experiment/runs/20260721T075704Z_448981"
+  embedding_name: "deepseek_ocr2_mean_l2.npy"
+  output_root: "/mnt/nvme_user/baoquan/Label_Data/benchmark-export/joint_cluster_v1"
+
+gt:
+  # Frozen v1: structure-forest roots/nodes/depth + taxonomy plain/structure tokens
+  depth_convention: "node_levels_leaf_equals_1"
+  exclude_structure_tokens: ["{", "}", "$"]
+  exclude_layout_from_plain: true
+
+image:
+  expected_dim: 1280
+  pca_variance: 0.95
+
+clustering:
+  k_min: 2
+  k_max: 8
+  n_init: 50
+  init: "k-means++"
+  # final_k: null  # auto (silhouette + min-size guard); set int to force
+  min_cluster_frac: 0.005
+  min_cluster_floor: 5
+
+galleries:
+  center_n: 20
+  outlier_n: 12
+
+umap:
+  n_neighbors: 15
+  min_dist: 0.1
+  metric: "euclidean"

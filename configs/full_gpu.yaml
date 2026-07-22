@@ -20,7 +20,7 @@ data:
   recursive: true
 
 paths:
-  output_root: "/home/baoquan/benchmark/deepseek"
+  output_root: "/mnt/nvme_user/baoquan/Label_Data/benchmark-export"
   reports_dir: null
   reports_v2_dir: null
 

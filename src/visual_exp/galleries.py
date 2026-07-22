@@ -14,7 +14,7 @@ import pandas as pd
 from PIL import Image
 
 from ..utils import ensure_dir
-from .diagnostics import load_embeddings
+from .io_util import load_aligned_embeddings
 
 
 def _sheet(paths: list[str], title: str, out: Path, ncols: int = 4) -> None:
@@ -55,7 +55,7 @@ def run_galleries(cfg: dict[str, Any]) -> None:
     seed = int(cfg.get("random_seed", 42))
     rng = np.random.default_rng(seed)
 
-    X, idx = load_embeddings(cfg)
+    X, idx, _ = load_aligned_embeddings(cfg)
     ids = idx["image_id"].astype(str).tolist()
     man = pd.read_parquet(Path(cfg["paths"]["metadata_dir"]) / "manifest.parquet")
     id_to_path = dict(zip(man["image_id"].astype(str), man["image_path"].astype(str)))
@@ -92,19 +92,38 @@ def run_galleries(cfg: dict[str, Any]) -> None:
         conf_ids = []
         if other_centers:
             OC = np.stack(other_centers, axis=0)
-            # max sim to any other center
             conf_score = (X[members] @ OC.T).max(axis=1)
             conf_order = np.argsort(-conf_score)
             conf_ids = [ids[members[i]] for i in conf_order[:n_show]]
 
-        _sheet([id_to_path.get(i, "") for i in center_ids], f"cluster_{c} centers", gal / "cluster_centers" / f"cluster_{c}.png")
-        _sheet([id_to_path.get(i, "") for i in boundary_ids], f"cluster_{c} boundaries", gal / "cluster_boundaries" / f"cluster_{c}.png")
-        _sheet([id_to_path.get(i, "") for i in rand_ids], f"cluster_{c} random", gal / "cluster_centers" / f"cluster_{c}_random.png")
+        _sheet(
+            [id_to_path.get(i, "") for i in center_ids],
+            f"cluster_{c} centers",
+            gal / "cluster_centers" / f"cluster_{c}.png",
+        )
+        _sheet(
+            [id_to_path.get(i, "") for i in boundary_ids],
+            f"cluster_{c} boundaries",
+            gal / "cluster_boundaries" / f"cluster_{c}.png",
+        )
+        _sheet(
+            [id_to_path.get(i, "") for i in rand_ids],
+            f"cluster_{c} random",
+            gal / "cluster_centers" / f"cluster_{c}_random.png",
+        )
         if conf_ids:
-            _sheet([id_to_path.get(i, "") for i in conf_ids], f"cluster_{c} confused", gal / "cluster_boundaries" / f"cluster_{c}_confused.png")
+            _sheet(
+                [id_to_path.get(i, "") for i in conf_ids],
+                f"cluster_{c} confused",
+                gal / "cluster_boundaries" / f"cluster_{c}_confused.png",
+            )
 
     if outliers:
         oids = list(outliers)[: max(n_show * 2, 32)]
-        _sheet([id_to_path.get(i, "") for i in oids], "HDBSCAN outliers", gal / "outliers" / "hdbscan_outliers.png")
+        _sheet(
+            [id_to_path.get(i, "") for i in oids],
+            "HDBSCAN outliers",
+            gal / "outliers" / "hdbscan_outliers.png",
+        )
 
     print(f"[galleries] wrote sheets for k={k}")

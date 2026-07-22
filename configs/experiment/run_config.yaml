@@ -1,6 +1,7 @@
 # DeepSeek-OCR2 mean-pooled projected-token embedding
-# Method: SAM → Qwen2 visual encoder → MLP Projector → masked mean pool → L2
+# Method (P1): SAM → Qwen2 → Projector → global 256 tokens → mean → L2
 # No OCR text generation, no GT, no layout parsing.
+# Outputs: experiment_root/runs/{run_id}/ (independent per run)
 
 method_name: "DeepSeek-OCR2 mean-pooled projected-token embedding"
 
@@ -16,7 +17,9 @@ preprocess:
   image_size: 768
   crop_mode: true
 
-pooling: "masked_mean"
+# P1: global-only 256 projected tokens (no local patches)
+use_local_patches: false
+pooling: "global_mean"
 normalization: "l2"
 exclude_view_separator: true
 random_seed: 42
@@ -27,7 +30,7 @@ data:
   recursive: true
 
 paths:
-  experiment_root: "/home/baoquan/benchmark/deepseek/experiment"
+  experiment_root: "/mnt/nvme_user/baoquan/Label_Data/benchmark-export"
 
 extract:
   data_parallel_size: auto
@@ -56,3 +59,4 @@ analysis:
   hdbscan_min_cluster_size_frac: 0.005
   hdbscan_min_cluster_size_floor: 20
   gallery_n: 16
+  confound_rho_threshold: 0.5

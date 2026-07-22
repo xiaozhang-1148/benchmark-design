@@ -1,0 +1,206 @@
+# Frozen token/phrase → category mapping for joint_cluster_v2
+# Rule: each *token* maps to at most ONE category (structure checked before content).
+# Multi-character Chinese *phrases* are matched on raw GT text (substring), not tokens.
+# Excluded from all mappings: { } $ & \\ layout/spacing-only commands.
+
+version: "v2.0"
+exclude_tokens:
+  - "{"
+  - "}"
+  - "$"
+  - "&"
+  - "\\"
+  - "\\,"
+  - "\\quad"
+  - "\\qquad"
+  - "\\ "
+  - "\\;"
+  - "\\!"
+
+# --- Structure presence (binary) -------------------------------------------
+structure:
+  has_fraction:
+    tokens: ["\\frac", "\\dfrac", "\\tfrac", "\\cfrac", "\\binom"]
+    node_types: ["Frac"]
+  has_root:
+    tokens: ["\\sqrt"]
+    node_types: ["Sqrt"]
+  has_superscript:
+    tokens: ["^"]
+    node_types: ["Sup"]
+  has_subscript:
+    tokens: ["_"]
+    node_types: ["Sub"]
+  has_matrix:
+    tokens: ["matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix", "array"]
+    node_types: []  # Env alone is ambiguous; rely on env name tokens
+  has_cases:
+    tokens: ["cases", "rcases"]
+    node_types: []
+  has_over_under:
+    tokens:
+      - "\\overset"
+      - "\\underset"
+      - "\\stackrel"
+      - "\\overbrace"
+      - "\\underbrace"
+      - "\\underline"
+      - "\\substack"
+      - "\\limits"
+    node_types: []
+  has_accent_vector:
+    tokens:
+      - "\\hat"
+      - "\\widehat"
+      - "\\vec"
+      - "\\bar"
+      - "\\overline"
+      - "\\dot"
+      - "\\mathring"
+      - "\\overrightarrow"
+      - "\\overleftarrow"
+    node_types: []
+
+# --- Math content presence (binary) ----------------------------------------
+content:
+  has_relation:
+    tokens:
+      - "="
+      - "<"
+      - ">"
+      - "\\neq"
+      - "\\ne"
+      - "\\leq"
+      - "\\geq"
+      - "\\le"
+      - "\\ge"
+      - "\\approx"
+      - "\\equiv"
+      - "\\simeq"
+      - "\\cong"
+      - "\\sim"
+      - "\\propto"
+      - "\\in"
+      - "\\notin"
+      - "\\subset"
+      - "\\supset"
+      - "\\subseteq"
+      - "\\supseteq"
+      - "\\xlongequal"
+    phrases: []
+  has_trigonometric:
+    tokens:
+      - "\\sin"
+      - "\\cos"
+      - "\\tan"
+      - "\\cot"
+      - "\\sec"
+      - "\\csc"
+      - "\\arcsin"
+      - "\\arccos"
+      - "\\arctan"
+      - "\\sinh"
+      - "\\cosh"
+      - "\\tanh"
+    phrases: ["正弦", "余弦", "正切", "余切", "arcsin", "arccos", "arctan"]
+  has_log_exponential:
+    tokens: ["\\log", "\\ln", "\\exp", "\\lg"]
+    phrases: ["对数", "指数"]
+  has_calculus:
+    tokens:
+      - "\\lim"
+      - "\\limsup"
+      - "\\liminf"
+      - "\\int"
+      - "\\iint"
+      - "\\iiint"
+      - "\\iiiint"
+      - "\\oint"
+      - "\\sum"
+      - "\\partial"
+      - "\\nabla"
+      - "\\infty"
+    node_types: ["Sum", "Lim"]
+    phrases: ["极限", "导数", "微分", "积分", "求和", "偏导"]
+  has_probability_statistics:
+    tokens: []
+    phrases:
+      - "概率"
+      - "期望"
+      - "方差"
+      - "均值"
+      - "频率"
+      - "标准差"
+      - "随机"
+      - "分布"
+      - "样本"
+  has_geometry:
+    tokens:
+      - "\\angle"
+      - "\\triangle"
+      - "\\perp"
+      - "\\parallel"
+      - "\\parallelogram"
+      - "\\degree"
+      - "\\cong"
+    phrases:
+      - "三角形"
+      - "直角"
+      - "锐角"
+      - "钝角"
+      - "平行"
+      - "垂直"
+      - "相似"
+      - "全等"
+      - "圆"
+      - "半径"
+      - "直径"
+      - "弦"
+      - "弧"
+      - "面积"
+      - "周长"
+      - "体积"
+      - "角"
+  has_vector_linear_algebra:
+    tokens:
+      - "\\vec"
+      - "\\det"
+      - "\\times"
+      - "\\cdot"
+      - "matrix"
+      - "pmatrix"
+      - "bmatrix"
+      - "vmatrix"
+      - "Vmatrix"
+    phrases:
+      - "向量"
+      - "矩阵"
+      - "行列式"
+      - "点积"
+      - "叉积"
+      - "线性"
+  has_proof_language:
+    tokens: ["\\because", "\\therefore"]
+    phrases:
+      - "证明"
+      - "因为"
+      - "所以"
+      - "由此"
+      - "可得"
+      - "故"
+      - "综上"
+      - "由题意"
+      - "易知"
+      - "显然"
+
+# Conflict resolution when a token appears in multiple lists:
+# structure categories win over content; within the same group, first-listed feature wins.
+# Explicit overrides (token → feature_id):
+token_priority_overrides:
+  "\\vec": has_accent_vector          # accent wins over vector-linear
+  "\\cong": has_relation              # congruence relation symbol
+  "matrix": has_matrix
+  "pmatrix": has_matrix
+  "bmatrix": has_matrix
+  "vmatrix": has_matrix
+  "Vmatrix": has_matrix

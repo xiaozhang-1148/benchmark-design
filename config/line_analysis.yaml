@@ -1,5 +1,5 @@
-input_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark
-output_root: ./line_level
+input_root: /mnt/nvme_user/baoquan/Label_Data/images_folder
+output_root: /mnt/nvme_user/baoquan/Label_Data/benchmark-export/line_level
 
 workers: 128  # null = auto (min(32, cpu_count*2)); override via --workers
 random_seed: 42

@@ -1,5 +1,5 @@
-input_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/benchmark
-output_root: ./page_level
+input_root: /mnt/nvme_user/baoquan/Label_Data/images_folder
+output_root: /mnt/nvme_user/baoquan/Label_Data/benchmark-export/page_level
 
 random_seed: 42
 

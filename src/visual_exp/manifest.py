@@ -9,8 +9,8 @@ from typing import Any
 import pandas as pd
 from tqdm import tqdm
 
-from ..feature_store import atomic_replace_parquet
 from ..utils import ensure_dir, iter_images, make_image_id, safe_image_meta, sha256_file
+from .io_util import atomic_write_parquet, stamp_run_id
 
 
 def _one(path: Path, root: Path) -> dict[str, Any]:
@@ -64,8 +64,9 @@ def build_manifest(cfg: dict[str, Any], *, limit: int | None = None) -> pd.DataF
     df = pd.DataFrame(rows)
     # stable order
     df = df.sort_values("image_id").reset_index(drop=True)
+    df = stamp_run_id(df, str(cfg["run_id"]))
     out = Path(cfg["paths"]["metadata_dir"]) / "manifest.parquet"
     ensure_dir(out.parent)
-    atomic_replace_parquet(df, out)
+    atomic_write_parquet(df, out)
     print(f"[manifest] n={len(df)} corrupt={int((df.status=='corrupt').sum())} -> {out}")
     return df
