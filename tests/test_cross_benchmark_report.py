@@ -72,7 +72,7 @@ def _make_profile(**overrides: object) -> CrossBenchmarkProfile:
         "cjk_token_ratio": 0.1,
         "other_unknown_token_ratio": 0.0,
         "notes": "",
-        "structural_difficulty_counts": (50, 20, 20, 10),
+        "structural_difficulty_counts": (50, 40, 10),
     }
     defaults.update(overrides)
     return CrossBenchmarkProfile(**defaults)  # type: ignore[arg-type]
@@ -102,8 +102,8 @@ def test_structural_difficulty_section_in_markdown() -> None:
         _make_profile(display_name="Ours"),
     ]
     text = build_cross_benchmark_comparison_markdown(profiles)
-    assert "## 7. Expression-level Structural Difficulty (L1–L4)" in text
-    assert "| Sample | 50 (50.00%) | 20 (20.00%) | 20 (20.00%) | 10 (10.00%) |" in text
+    assert "## 7. Expression-level Structural Difficulty (L1–L3)" in text
+    assert "| Sample | 50 (50.00%) | 40 (40.00%) | 10 (10.00%) |" in text
 
 
 @pytest.mark.integration
@@ -138,7 +138,7 @@ def test_cross_benchmark_comparison_markdown_structure(tmp_path: Path) -> None:
     assert "Do **not** sum **Environment**" in text
     assert "Multi-Struct ≥2" not in text
     assert "## 6. AST Depth Distribution" in text
-    assert "## 7. Expression-level Structural Difficulty (L1–L4)" in text
+    assert "## 7. Expression-level Structural Difficulty (L1–L3)" in text
     assert "depth 0" in text
     assert "count (share%)" in text
     assert "## 8. Token Taxonomy Composition" in text

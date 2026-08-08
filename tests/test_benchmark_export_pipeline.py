@@ -37,12 +37,11 @@ def test_benchmark_export_dependencies_cover_primary_outputs() -> None:
         "line_level",
         "HMER",
         "page_level_HMER",
-        "page_level_latex_split",
     }
     assert "page_level" in BENCHMARK_EXPORT_DEPENDENCIES
     assert "block_level/structure_layout" in BENCHMARK_EXPORT_DEPENDENCIES
     assert "block_level/hybrid_layout" in BENCHMARK_EXPORT_DEPENDENCIES
-    assert "block_level/hybrid_layout" in BENCHMARK_EXPORT_DEPENDENCIES["page_level_latex_split"]
+    assert "page_level_latex_split" not in BENCHMARK_EXPORT_DEPENDENCIES
 
 
 def test_benchmark_export_layout_resolves_nested_page_level_paths(tmp_path: Path) -> None:
@@ -51,7 +50,7 @@ def test_benchmark_export_layout_resolves_nested_page_level_paths(tmp_path: Path
     assert layout.block_level == layout.export_root / "block_level"
     assert layout.structure_layout == layout.block_level / "structure_layout"
     assert layout.hybrid_layout == layout.block_level / "hybrid_layout"
-    assert layout.split_inputs == layout.page_level_latex_split / "inputs"
+    assert layout.page_level_hmer == layout.export_root / "page_level_HMER"
 
 
 def test_run_benchmark_export_pipeline_smoke(tmp_path: Path) -> None:
@@ -68,7 +67,6 @@ def test_run_benchmark_export_pipeline_smoke(tmp_path: Path) -> None:
         skip_page_level_figures=True,
         skip_line_level_figures=True,
         skip_page_level_hmer_figures=True,
-        skip_page_level_latex_split=True,
     )
 
     layout = BenchmarkExportLayout(output_root)
@@ -79,7 +77,6 @@ def test_run_benchmark_export_pipeline_smoke(tmp_path: Path) -> None:
     assert result.density_output == layout.page_level
     assert result.line_level_output == layout.line_level
     assert result.page_level_hmer_output == layout.page_level_hmer
-    assert result.page_level_latex_split_output is None
     assert result.pipeline_doc == output_root / "PIPELINE.md"
     assert result.pipeline_doc.is_file()
     assert (output_root / "pipeline_manifest.json").is_file()
@@ -92,3 +89,6 @@ def test_run_benchmark_export_pipeline_smoke(tmp_path: Path) -> None:
         assert (layout.block_level / "block_foreground_density_distribution.png").is_file()
         assert (layout.block_level / "block_level_summary.md").is_file()
         assert (layout.block_level / "tables" / "block_density_statistics.csv").is_file()
+    assert not (output_root / "page_level_latex_split").exists()
+    assert not (layout.page_level_hmer / "figures" / "fig6_3_ast_depth_coverage.png").exists()
+    assert not (layout.page_level_hmer / "summary" / "page_latex_ast_depth_coverage.csv").exists()

@@ -36,15 +36,6 @@ BENCHMARK_EXPORT_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_STRUCTURE_LAYOUT_DIR}": (),
     f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_HYBRID_LAYOUT_DIR}": (),
     PAGE_LEVEL_HMER_DIR: (HMER_DIR,),
-    f"{PAGE_LEVEL_LATEX_SPLIT_DIR}/{SPLIT_INPUTS_DIR}": (PAGE_LEVEL_HMER_DIR,),
-    PAGE_LEVEL_LATEX_SPLIT_DIR: (
-        f"{PAGE_LEVEL_LATEX_SPLIT_DIR}/{SPLIT_INPUTS_DIR}",
-        PAGE_LEVEL_DIR,
-        LINE_LEVEL_DIR,
-        HMER_DIR,
-        f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_STRUCTURE_LAYOUT_DIR}",
-        f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_HYBRID_LAYOUT_DIR}",
-    ),
 }
 
 # Top-level export roots referenced in papers and cross-domain joins.
@@ -54,7 +45,6 @@ BENCHMARK_EXPORT_PRIMARY_DIRS: tuple[str, ...] = (
     LINE_LEVEL_DIR,
     HMER_DIR,
     PAGE_LEVEL_HMER_DIR,
-    PAGE_LEVEL_LATEX_SPLIT_DIR,
 )
 
 
@@ -285,7 +275,6 @@ def write_export_pipeline_doc(export_root: Path) -> Path:
         f"  {LINE_LEVEL_DIR}/                      # line geometry / interference",
         f"  {HMER_DIR}/                            # expression-level OCR metrics",
         f"  {PAGE_LEVEL_HMER_DIR}/                 # page-level LaTeX / expression aggregates",
-        f"  {PAGE_LEVEL_LATEX_SPLIT_DIR}/          # stratified split manifest + Ch.7 tables",
         "  summary.json",
         "  dataset_overview.md",
         "```",
@@ -302,9 +291,7 @@ def write_export_pipeline_doc(export_root: Path) -> Path:
         f"4. **{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_HYBRID_LAYOUT_DIR}** — hybrid-layout pages "
         "with the same table schema.",
         "5. **line_level** — per-line metrics in `line_metrics.csv` (`image_id` = page id).",
-        "6. **page_level_HMER** — page/expression LaTeX metrics used to build split inputs.",
-        "7. **page_level_latex_split** — joins sibling exports for cross-domain Ch.7 tables "
-        "(fig 7-3 density, 7-4 layout, 7-5 lines, 7-6 expression difficulty).",
+        "6. **page_level_HMER** — page/expression LaTeX metrics and Chapter 6 figures.",
         "",
         "## Key join files",
         "",
@@ -315,7 +302,6 @@ def write_export_pipeline_doc(export_root: Path) -> Path:
         f"- Flow structure: `{(layout.structure_layout / 'tables/flow_structure_page_metrics.csv').relative_to(export_root).as_posix()}` + hybrid sibling",
         f"- Line metrics: `{(layout.line_level / 'line_metrics.csv').relative_to(export_root).as_posix()}`",
         f"- Expression stats: `{(layout.hmer / 'details/expression_level_statistics.csv').relative_to(export_root).as_posix()}`",
-        f"- Split manifest: `{(layout.page_level_latex_split / 'split_manifest.csv').relative_to(export_root).as_posix()}`",
         "",
         "## CLI",
         "",

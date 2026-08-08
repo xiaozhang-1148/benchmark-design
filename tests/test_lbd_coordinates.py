@@ -29,31 +29,31 @@ from benchmark_design.report.lbd_coordinate_table import (
 EXPECTED_POSITION_STRUCTURAL_DIFFICULTY: dict[str, str] = {
     "L0B0D0": "L1",
     "L0B0D1": "L2",
-    "L0B0D2": "L3",
+    "L0B0D2": "L2",
     "L0B1D0": "L2",
     "L0B1D1": "L2",
-    "L0B1D2": "L3",
+    "L0B1D2": "L2",
     "L0B2D0": "L2",
-    "L0B2D1": "L3",
-    "L0B2D2": "L3",
+    "L0B2D1": "L2",
+    "L0B2D2": "L2",
     "L1B0D0": "L2",
     "L1B0D1": "L2",
-    "L1B0D2": "L3",
+    "L1B0D2": "L2",
     "L1B1D0": "L2",
-    "L1B1D1": "L3",
-    "L1B1D2": "L3",
-    "L1B2D0": "L3",
-    "L1B2D1": "L3",
-    "L1B2D2": "L4",
-    "L2B0D0": "L3",
-    "L2B0D1": "L3",
-    "L2B0D2": "L4",
-    "L2B1D0": "L3",
-    "L2B1D1": "L3",
-    "L2B1D2": "L4",
-    "L2B2D0": "L3",
-    "L2B2D1": "L4",
-    "L2B2D2": "L4",
+    "L1B1D1": "L2",
+    "L1B1D2": "L2",
+    "L1B2D0": "L2",
+    "L1B2D1": "L2",
+    "L1B2D2": "L3",
+    "L2B0D0": "L2",
+    "L2B0D1": "L2",
+    "L2B0D2": "L3",
+    "L2B1D0": "L2",
+    "L2B1D1": "L2",
+    "L2B1D2": "L3",
+    "L2B2D0": "L2",
+    "L2B2D1": "L3",
+    "L2B2D2": "L3",
 }
 
 
@@ -117,8 +117,8 @@ def test_classify_lbd_all_27_positions() -> None:
 
 
 def test_classify_lbd_extreme_high_requires_nonzero_l_and_d() -> None:
-    assert classify_lbd("L2", "B2", "D0") == "L3"
-    assert classify_lbd("L0", "B2", "D2") == "L3"
+    assert classify_lbd("L2", "B2", "D0") == "L2"
+    assert classify_lbd("L0", "B2", "D2") == "L2"
 
 
 def test_compute_lbd_metrics_has_27_positions_and_zero_rows() -> None:
@@ -134,7 +134,7 @@ def test_compute_lbd_metrics_has_27_positions_and_zero_rows() -> None:
     assert len(metrics.position_counts) == 27
     assert len(iter_all_position_ids()) == 27
     assert sum(row.count for row in metrics.position_counts) == 2
-    assert len(metrics.structural_difficulty_counts) == 4
+    assert len(metrics.structural_difficulty_counts) == 3
     zero_rows = [row for row in metrics.position_counts if row.count == 0]
     assert len(zero_rows) == 25
     assert validate_lbd_coordinates(metrics) == []
@@ -163,7 +163,7 @@ def test_structural_difficulty_csv_export_format(tmp_path: Path) -> None:
     )
     with (tmp_path / "expression_structural_difficulty_counts.csv").open(encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
-    assert len(rows) == 4
+    assert len(rows) == 3
     assert [row["structural_difficulty"] for row in rows] == list(STRUCTURAL_DIFFICULTY_TIERS)
     l1 = next(row for row in rows if row["structural_difficulty"] == "L1")
     assert l1["count"] == "1"

@@ -186,27 +186,6 @@ def _add_unified_export_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Skip page_level_HMER figure generation only",
     )
-    parser.add_argument(
-        "--run-page-level-latex-split",
-        action="store_true",
-        help="Run stratified split after export (writes page_level_latex_split/)",
-    )
-    parser.add_argument(
-        "--page-level-latex-split-config",
-        type=Path,
-        default=DEFAULT_PAGE_LEVEL_LATEX_SPLIT_CONFIG,
-        help="YAML config for page_level_latex_split",
-    )
-    parser.add_argument(
-        "--skip-page-level-latex-split-figures",
-        action="store_true",
-        help="Skip Chapter 7 split figures only",
-    )
-    parser.add_argument(
-        "--allow-split-acceptance-failure",
-        action="store_true",
-        help="Do not fail project export when split acceptance checks fail",
-    )
 
 
 def _run_project_like_export(args: argparse.Namespace) -> int:
@@ -244,10 +223,6 @@ def _run_project_like_export(args: argparse.Namespace) -> int:
         line_level_output=args.line_level_output,
         skip_page_level_hmer=args.skip_page_level_hmer,
         skip_page_level_hmer_figures=skip_all_figures or args.skip_page_level_hmer_figures,
-        skip_page_level_latex_split=not args.run_page_level_latex_split,
-        page_level_latex_split_config=args.page_level_latex_split_config,
-        skip_page_level_latex_split_figures=skip_all_figures or args.skip_page_level_latex_split_figures,
-        allow_split_acceptance_failure=args.allow_split_acceptance_failure,
     )
     print(f"wrote project export under {result.output_root.resolve()}")
     print(f"summary.json: {result.summary_json.resolve()}")
@@ -260,8 +235,6 @@ def _run_project_like_export(args: argparse.Namespace) -> int:
         print(f"Line-level: {result.line_level_output.resolve()}")
     if result.page_level_hmer_output is not None:
         print(f"Page-level HMER: {result.page_level_hmer_output.resolve()}")
-    if result.page_level_latex_split_output is not None:
-        print(f"Split: {result.page_level_latex_split_output.resolve()}")
     print(f"dataset overview: {result.dataset_overview.resolve()}")
     print(f"HMER detail: {(result.hmer_output / 'summary.md').resolve()}")
     print(
@@ -673,7 +646,7 @@ def _build_parser() -> argparse.ArgumentParser:
     page_level_sub = page_level_parser.add_subparsers(dest="page_level_command", required=True)
     page_level_export_parser = page_level_sub.add_parser(
         "export",
-        help="Export page-level image analysis (inventory, calibration, features, heatmaps, report)",
+        help="Export page-level image analysis (inventory, calibration, features, report)",
     )
     page_level_export_parser.add_argument(
         "--config",
@@ -928,12 +901,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.skip_figures = True
             if project_config.pipelines.page_level_hmer.get("skip_figures"):
                 args.skip_page_level_hmer_figures = True
-            split_cfg = project_config.pipelines.page_level_latex_split
-            if split_cfg.get("enabled"):
-                args.run_page_level_latex_split = True
-            split_config_path = split_cfg.get("config")
-            if split_config_path and args.page_level_latex_split_config == DEFAULT_PAGE_LEVEL_LATEX_SPLIT_CONFIG:
-                args.page_level_latex_split_config = Path(split_config_path)
         return _run_project_like_export(args)
 
     if args.command == "export":

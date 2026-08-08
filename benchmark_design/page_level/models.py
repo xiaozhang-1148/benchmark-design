@@ -7,13 +7,6 @@ from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
-class AspectRatioBin:
-    name: str
-    min_ratio: float
-    max_ratio: float
-
-
-@dataclass(frozen=True, slots=True)
 class PageLevelConfig:
     input_root: Path
     output_root: Path
@@ -21,8 +14,6 @@ class PageLevelConfig:
     dark_percentile: float = 1.0
     light_percentile: float = 99.5
     threshold_method: str = "global_pooled_otsu"
-    aspect_ratio_groups_enabled: bool = True
-    aspect_ratio_bins: tuple[AspectRatioBin, ...] = ()
     workers: int | None = None
     show_progress: bool = True
 
@@ -93,7 +84,6 @@ class ImageFeatureRow:
     effective_color_type: str
     bits_per_channel: int
     foreground_density: float
-    aspect_ratio_group: str = ""
 
 
 @dataclass(frozen=True, slots=True)

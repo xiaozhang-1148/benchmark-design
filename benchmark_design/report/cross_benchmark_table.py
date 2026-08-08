@@ -139,11 +139,9 @@ def write_cross_benchmark_profiles_csv(profiles: list[CrossBenchmarkProfile], ou
                 "structural_difficulty_l1_count",
                 "structural_difficulty_l2_count",
                 "structural_difficulty_l3_count",
-                "structural_difficulty_l4_count",
                 "structural_difficulty_l1_ratio",
                 "structural_difficulty_l2_ratio",
                 "structural_difficulty_l3_ratio",
-                "structural_difficulty_l4_ratio",
             ]
         )
         for profile in profiles:
@@ -214,11 +212,9 @@ def write_cross_benchmark_profiles_csv(profiles: list[CrossBenchmarkProfile], ou
                     profile.structural_difficulty_counts[0],
                     profile.structural_difficulty_counts[1],
                     profile.structural_difficulty_counts[2],
-                    profile.structural_difficulty_counts[3],
                     f"{tier_ratios[0]:.6f}",
                     f"{tier_ratios[1]:.6f}",
                     f"{tier_ratios[2]:.6f}",
-                    f"{tier_ratios[3]:.6f}",
                 ]
             )
 

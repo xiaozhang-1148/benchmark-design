@@ -2,7 +2,29 @@
 
 Benchmark dataset analysis for **HMER** (handwritten math expression recognition) and **block-level** (image-side block annotation) metrics.
 
-## Project layout
+## 项目模块地图（Module Map）
+
+仓库按功能域分层，`benchmark_design/` 与 `src/` 为可导入 Python 包，其余为独立工具/归档目录：
+
+```text
+benchmark-design/
+├── benchmark_design/          # 核心分析库（可安装包，python -m benchmark_design）
+├── src/                       # 实验代码（视觉/文本特征、聚类等；含符号链接）
+├── tools/                     # 独立工具域与论文图归档
+│   ├── candidate_select_cluster/   # 候选样本筛选与聚类修正
+│   ├── seed21pro_tools/            # Seed 2.1 Pro 转录/标注
+│   └── figure_data_code/           # 论文/报告用图（数据 + 出图代码 + SVG）
+├── config/                    # 核心分析配置（benchmark_design 使用）
+├── configs/                   # 实验配置（src/ 各实验使用）
+├── scripts/                   # 一次性/运维辅助脚本
+├── tests/                     # pytest 测试
+├── pyproject.toml
+└── uv.lock
+```
+
+**注意**：`src/` 下的 `equal_fusion_cluster`、`initial_candidate_select`、`stage2_cluster_adjust`、`global_random_dedupe`、`qa_latex_transcribe` 是指向 `tools/` 内实现目录的**符号链接**，保持 `from src.xxx import` 的兼容导入路径；勿删除。
+
+### 核心分析库（benchmark_design/）
 
 ```
 benchmark_design/
@@ -18,6 +40,37 @@ benchmark_design/
     block_level/    # block-level output layout + export pipeline
   progress.py       # shared Rich / parallel helpers
 ```
+
+### 实验代码（src/）
+
+| 子目录 | 功能 |
+|--------|------|
+| `deepseek_ocr2_features/` | DeepSeek-OCR2 视觉特征提取 |
+| `qwen3_text_features/` | Qwen3 文本特征提取 |
+| `joint_cluster/` `joint_cluster_v2/` | 联合聚类（v1 / v2） |
+| `visual_exp/` | 视觉特征聚类实验 |
+| `analysis_v2/` | 特征分析 v2 |
+| `equal_fusion_cluster/` 等 | → 指向 `tools/candidate_select_cluster/src/`（符号链接） |
+| `qa_latex_transcribe/` | → 指向 `tools/seed21pro_tools/src/`（符号链接） |
+
+### 独立工具域（tools/）
+
+| 目录 | 说明 | 入口 |
+|------|------|------|
+| `candidate_select_cluster/` | 候选样本筛选与聚类修正（4 阶段） | `tools/candidate_select_cluster/README.md` |
+| `seed21pro_tools/` | Seed 2.1 Pro Q/A 转录、学生 OCR 回填、数学标签 | `tools/seed21pro_tools/README.md` |
+| `figure_data_code/` | 论文三张图的数据、出图代码与 SVG | `tools/figure_data_code/README.md` |
+
+### 配置
+
+| 目录 | 用途 |
+|------|------|
+| `config/` | 核心分析：`project.yaml`、`image_analysis.yaml`、`line_analysis.yaml`、`page_level_latex_split.yaml` |
+| `configs/` | 实验：`default.yaml`、`full_gpu.yaml`、`smoke.yaml`、`experiment/`、`joint_cluster/` |
+
+`configs/` 为各 `src/` 实验脚本 `--config` 的默认路径，勿与 `config/` 混淆。
+
+## 核心 CLI（benchmark_design）
 
 | Domain | CLI | Output root | Focus |
 |--------|-----|-------------|--------|
@@ -55,20 +108,18 @@ benchmark_export/
   PIPELINE.md                    # layer linkage and join keys
   pipeline_manifest.json         # machine-readable stage graph
   page_level/
-    density/                     # foreground features → split table 9
-    structure_layout/            # flow structure → split table 10
-  line_level/                    # line geometry → split tables 11
-  HMER/                          # expression stats → split table 12
-  page_level_HMER/               # page LaTeX metrics (Chapter 6); split inputs
-  page_level_latex_split/        # stratified split + Ch.7 tables/figures
-    inputs/                      # frozen CSVs from page_level_HMER
+    density/                     # foreground features
+    structure_layout/            # flow structure
+  line_level/                    # line geometry
+  HMER/                          # expression stats
+  page_level_HMER/               # page LaTeX metrics (Chapter 6)
 ```
 
-**Dependency order:** HMER + `page_level/density` + `page_level/structure_layout` (parallel) → `line_level` (uses density calibration) + `page_level_HMER` (parallel) → `page_level_latex_split/inputs` → `page_level_latex_split` (joins all siblings on `page_id`).
+**Dependency order:** HMER + `page_level` + `block_level/structure_layout` + `block_level/hybrid_layout` (parallel) → `line_level` (uses density calibration) + `page_level_HMER` (parallel).
 
 Standalone module name for page-level HMER is `page_level_latex`; the export directory is `page_level_HMER/`.
 
-Options mirror individual pipelines (`--skip-figures`, `--skip-page-level`, `--skip-line-level`, `--skip-page-level-hmer`, `--run-page-level-latex-split`, etc.). Legacy flat paths `block_level/` and top-level `page_level/tables/` remain readable via fallbacks in cross-domain joins.
+Options mirror individual pipelines (`--skip-figures`, `--skip-page-level`, `--skip-line-level`, `--skip-page-level-hmer`, etc.). Legacy flat paths `block_level/` and top-level `page_level/tables/` remain readable via fallbacks in cross-domain joins.
 
 ### Legacy unified export
 

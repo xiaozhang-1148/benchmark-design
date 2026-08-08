@@ -9,12 +9,7 @@ import numpy as np
 import pandas as pd
 
 from benchmark_design.page_level_latex.expression_latex_metrics import ExpressionLatexMetricsRow
-from benchmark_design.page_level_latex.latex_protocol import (
-    STRUCTURE_TYPE_ORDER,
-    TAXONOMY_CATEGORY_TO_FIELD,
-    TOKEN_CATEGORY_ORDER,
-    TokenCategory,
-)
+from benchmark_design.page_level_latex.latex_protocol import STRUCTURE_TYPE_ORDER
 from benchmark_design.page_level_latex.page_latex_metrics import PageLatexMetricsRow
 from benchmark_design.page_level_latex.plot_style import page_ratio
 
@@ -23,7 +18,7 @@ def total_pages(page_rows: Sequence[PageLatexMetricsRow]) -> int:
     return len(page_rows)
 
 
-# Fixed intervals for Figure 6-1 (inclusive closed ranges; last bin is open-ended ">X").
+# Fixed intervals for Figures 6-1 / 6-2 / 6-3 (inclusive closed ranges; last bin is open-ended ">X").
 FIG6_1_BIN_SPECS: dict[str, tuple[tuple[int | None, int | None, str], ...]] = {
     "ast_tree_count": (
         (1, 10, "1–10"),
@@ -93,6 +88,35 @@ def fixed_bin_frame(
     return pd.DataFrame(rows)
 
 
+def build_fig6_raw_count_curve_data(
+    page_rows: Sequence[PageLatexMetricsRow],
+    *,
+    field: str,
+) -> pd.DataFrame:
+    """Per-value page counts for an integer page metric (no interval bins)."""
+    total = total_pages(page_rows)
+    values = [int(getattr(row, field)) for row in page_rows]
+    if not values:
+        return pd.DataFrame(
+            columns=["metric", "value", "page_count", "page_ratio"]
+        )
+    counts = Counter(values)
+    lo = min(counts)
+    hi = max(counts)
+    rows = []
+    for value in range(lo, hi + 1):
+        count = int(counts.get(value, 0))
+        rows.append(
+            {
+                "metric": field,
+                "value": value,
+                "page_count": count,
+                "page_ratio": page_ratio(count, total),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def build_fig6_1_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
     total = total_pages(page_rows)
     frames = []
@@ -110,34 +134,6 @@ def build_fig6_1_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataF
             )
         )
     return pd.concat(frames, ignore_index=True)
-
-
-def build_fig6_3_plot_data(
-    expression_rows: Sequence[ExpressionLatexMetricsRow],
-    page_rows: Sequence[PageLatexMetricsRow],
-) -> pd.DataFrame:
-    from collections import defaultdict
-
-    total = total_pages(page_rows)
-    valid = [row for row in expression_rows if row.valid_for_latex]
-    depths_by_page: dict[str, set[int]] = defaultdict(set)
-    for row in valid:
-        depths_by_page[row.image_id].add(row.ast_depth)
-    max_depth_counts = Counter(page.max_ast_depth for page in page_rows)
-    records = []
-    for depth in range(0, 6):
-        coverage = sum(1 for page in page_rows if depth in depths_by_page.get(page.image_id, set()))
-        max_count = max_depth_counts.get(depth, 0)
-        records.append(
-            {
-                "ast_depth": depth,
-                "coverage_page_count": coverage,
-                "coverage_page_ratio": page_ratio(coverage, total),
-                "max_depth_page_count": max_count,
-                "max_depth_page_ratio": page_ratio(max_count, total),
-            }
-        )
-    return pd.DataFrame(records)
 
 
 def build_fig6_4_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
@@ -167,13 +163,8 @@ def build_fig6_4_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataF
     return pd.DataFrame(records)
 
 
-def _structure_group(count: int) -> str:
-    if count >= 4:
-        return "at_least_4"
-    return str(count)
-
-
 def build_fig6_5_joint_exact(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
+    """Exact structure-type-count × max-AST-depth joint distribution (summary tables)."""
     total = total_pages(page_rows)
     records = []
     for structure_count in range(0, len(STRUCTURE_TYPE_ORDER) + 1):
@@ -195,28 +186,6 @@ def build_fig6_5_joint_exact(page_rows: Sequence[PageLatexMetricsRow]) -> pd.Dat
     return pd.DataFrame(records)
 
 
-def build_fig6_5_joint_grouped(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
-    total = total_pages(page_rows)
-    records = []
-    for group in ("0", "1", "2", "3", "at_least_4"):
-        for depth in range(0, 6):
-            count = sum(
-                1
-                for page in page_rows
-                if _structure_group(page.distinct_structure_type_count) == group
-                and page.max_ast_depth == depth
-            )
-            records.append(
-                {
-                    "structure_type_count_group": group,
-                    "max_ast_depth": depth,
-                    "page_count": count,
-                    "page_ratio": page_ratio(count, total),
-                }
-            )
-    return pd.DataFrame(records)
-
-
 FIG6_6_DISTINCT_TOKEN_BIN_SPECS: tuple[tuple[int | None, int | None, str], ...] = (
     (1, 20, "1–20"),
     (21, 40, "21–40"),
@@ -225,18 +194,6 @@ FIG6_6_DISTINCT_TOKEN_BIN_SPECS: tuple[tuple[int | None, int | None, str], ...] 
     (81, 100, "81–100"),
     (101, 120, "101–120"),
     (121, None, ">120"),
-)
-
-FIG6_9_TOTAL_TOKEN_BIN_SPECS: tuple[tuple[int | None, int | None, str], ...] = (
-    (0, 0, "0"),
-    (1, 100, "1–100"),
-    (101, 200, "101–200"),
-    (201, 300, "201–300"),
-    (301, 400, "301–400"),
-    (401, 500, "401–500"),
-    (501, 750, "501–750"),
-    (751, 1000, "751–1000"),
-    (1001, None, ">1000"),
 )
 
 
@@ -249,47 +206,6 @@ def build_fig6_6_distinct_token_plot_data(page_rows: Sequence[PageLatexMetricsRo
         specs=FIG6_6_DISTINCT_TOKEN_BIN_SPECS,
         total_pages=total,
     )
-
-
-def build_fig6_9_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
-    """Pages grouped by total token count (with repetition)."""
-    total = total_pages(page_rows)
-    values = np.array([page.total_token_count for page in page_rows], dtype=np.float64)
-    return fixed_bin_frame(
-        values,
-        metric="total_token_count",
-        specs=FIG6_9_TOTAL_TOKEN_BIN_SPECS,
-        total_pages=total,
-    )
-
-
-def build_fig6_10_plot_data(page_rows: Sequence[PageLatexMetricsRow]) -> pd.DataFrame:
-    """Pages grouped by distinct token count (unique types on page)."""
-    return build_fig6_6_distinct_token_plot_data(page_rows)
-
-
-def build_fig6_6_category_plot_data(
-    expression_rows: Sequence[ExpressionLatexMetricsRow],
-    page_rows: Sequence[PageLatexMetricsRow],
-) -> pd.DataFrame:
-    total = total_pages(page_rows)
-    valid = [row for row in expression_rows if row.valid_for_latex]
-    records = []
-    for category in TOKEN_CATEGORY_ORDER:
-        if category == TokenCategory.OTHER:
-            continue
-        field = TAXONOMY_CATEGORY_TO_FIELD[category]
-        token_total = sum(row.token_category_counts.get(field, 0) for row in valid)
-        page_count = sum(1 for page in page_rows if page.token_category_counts.get(field, 0) > 0)
-        records.append(
-            {
-                "token_category": category.value,
-                "token_occurrence_count": token_total,
-                "page_count": page_count,
-                "page_ratio": page_ratio(page_count, total),
-            }
-        )
-    return pd.DataFrame(records)
 
 
 FIG6_7_OCCURRENCE_BINS: tuple[tuple[int | None, int | None, str], ...] = (
@@ -327,22 +243,6 @@ def build_fig6_7_plot_data(
                 "occurrence_bin": label,
                 "page_count": count,
                 "page_ratio": page_ratio(count, total),
-            }
-        )
-    return pd.DataFrame(records)
-
-
-def build_fig6_8_plot_data(group_summary: pd.DataFrame) -> pd.DataFrame:
-    records = []
-    for rec in group_summary.itertuples(index=False):
-        display = getattr(rec, "group_display", rec.group_name)
-        records.append(
-            {
-                "group_name": rec.group_name,
-                "group_display": display,
-                "cooccurrence_event_count": int(rec.cooccurrence_event_count),
-                "cooccurrence_page_count": int(rec.cooccurrence_page_count),
-                "cooccurrence_page_ratio": float(rec.cooccurrence_page_ratio),
             }
         )
     return pd.DataFrame(records)

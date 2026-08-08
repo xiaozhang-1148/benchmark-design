@@ -12,7 +12,6 @@ from benchmark_design.page_level.config import load_page_level_config
 from benchmark_design.page_level.models import PageLevelConfig
 from benchmark_design.page_level.pipeline import run_page_level_analysis
 from benchmark_design.report.page_level.export_tables import (
-    write_aspect_ratio_groups,
     write_calibration_outputs,
     write_feature_tables,
     write_inventory_tables,
@@ -130,9 +129,6 @@ def _run_export_with_config(
         layout.report,
         calibration_payload,
     )
-
-    if config.aspect_ratio_groups_enabled:
-        write_aspect_ratio_groups(features, layout.tables)
 
     figure_manifest: dict[str, str] = {}
     if not skip_figures:

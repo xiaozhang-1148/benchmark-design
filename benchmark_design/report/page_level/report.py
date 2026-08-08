@@ -56,24 +56,9 @@ def _lookup_continuous_median(dataset_summary: dict, metric: str) -> float:
 
 
 def _analysis_conclusions(dataset_summary: dict) -> list[str]:
-    aspect_groups = dataset_summary.get("aspect_groups", {})
-    dominant_group = None
-    dominant_ratio = 0.0
-    if isinstance(aspect_groups, dict):
-        for name, payload in aspect_groups.items():
-            if name in {"all", "other"}:
-                continue
-            ratio = float(payload.get("ratio", 0.0))
-            if ratio > dominant_ratio:
-                dominant_ratio = ratio
-                dominant_group = name
     lines = [
         "## 7. Analysis Conclusions",
         "",
-        (
-            f"- **版式结构**：数据集呈多峰宽高比分布；"
-            f"{'主导版式为 ' + str(dominant_group) + f'（{dominant_ratio * 100:.1f}%）' if dominant_group else '需结合 aspect_groups 表'}。"
-        ),
         (
             f"- **前景密度**：全页墨迹密度中位数约为 "
             f"{_lookup_continuous_median(dataset_summary, 'foreground_density') * 100:.2f}%；"
@@ -105,8 +90,8 @@ def write_image_analysis_report(
         "",
         "## 1. Scope",
         "",
-        "Pure image-level analysis of HMER answer-page images, limited to aspect ratio",
-        "and page foreground density. OCR text and polygon annotations are not used",
+        "Pure image-level analysis of HMER answer-page images, limited to",
+        "page foreground density. OCR text and polygon annotations are not used",
         "beyond enumerating image paths from benchmark JSON.",
         "",
         "## 2. Input and Output",
@@ -141,7 +126,6 @@ def write_image_analysis_report(
         "| --- | --- |",
         _metric_row(continuous, "width"),
         _metric_row(continuous, "height"),
-        _metric_row(continuous, "aspect_ratio"),
         _metric_row(continuous, "foreground_density"),
         "",
     ]
@@ -211,7 +195,7 @@ def write_run_manifest(
         "image_count": image_count,
         "workers": config.workers,
         "random_seed": config.random_seed,
-        "scope": ["aspect_ratio", "foreground_density"],
+        "scope": ["foreground_density"],
         "calibration": {
             "dark_reference": calibration.dark_reference,
             "light_reference": calibration.light_reference,

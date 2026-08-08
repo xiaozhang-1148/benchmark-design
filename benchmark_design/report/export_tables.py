@@ -474,7 +474,7 @@ def write_tables_readme(output_path: Path) -> None:
         "- `structure_cooccurrence_matrix.csv` — pairwise structure co-occurrence counts (appendix).",
         "- `figures/structure_cooccurrence_heatmap.png` — joint distribution of structure type count "
         "and maximum AST nesting depth in Ours (log-scaled counts; percentages over all instances).",
-        "- `figures/lbd_coordinate_examples/<L1|L2|L3|L4>/` — up to 20 OCR crop examples per tier.",
+        "- `figures/lbd_coordinate_examples/<L1|L2|L3>/` — up to 20 OCR crop examples per tier.",
         "- `figures/stc_high_complexity/` — top 20 NTC/CBC high-complexity expression crops.",
         "- `confusable_token_counts.csv` — Table 9 token-by-token counts for all confusable groups.",
         "- `examples/confusable_token_4_varphi_examples.csv` — 20 sample expressions for `4` and `\\varphi` (OCR length > 3).",
@@ -487,7 +487,7 @@ def write_tables_readme(output_path: Path) -> None:
         "- `cross_benchmark_profiles.csv` — full multi-metric profile table.",
         "- `cross_benchmark_summary.csv` — compact comparison.",
         "- `cross_benchmark_length_bins.csv` — length bins by dataset.",
-        "- `cross_benchmark_structural_difficulty.csv` — L1–L4 structural difficulty tiers by dataset.",
+        "- `cross_benchmark_structural_difficulty.csv` — L1–L3 structural difficulty tiers by dataset.",
         "- `cross_benchmark_tokenizer_coverage.csv` — `unclassified_token_ratio` and vocab coverage.",
         "- `cross_benchmark_provenance.csv` — external dataset sources (no absolute filesystem paths).",
         "",

@@ -10,7 +10,9 @@ from typing import Any
 import pandas as pd
 
 from .clustering import run_clustering
+from .cluster_figures import export_cluster_projection_figures
 from .config import dump_frozen_run_config, load_run_config
+from .microcluster_1000 import run_microcluster_1000
 from .diagnostics import run_diagnostics
 from .extract_run import run_extract
 from .galleries import run_galleries
@@ -105,6 +107,8 @@ def run_visual_experiment(cfg: dict[str, Any], stages: list[str] | None = None) 
         "diagnostics": lambda: run_diagnostics(cfg),
         "projections": lambda: run_projections(cfg),
         "clustering": lambda: run_clustering(cfg),
+        "cluster_figures": lambda: export_cluster_projection_figures(cfg),
+        "microcluster_1000": lambda: run_microcluster_1000(cfg),
         "galleries": lambda: run_galleries(cfg),
         "report": lambda: build_html_report(cfg),
         "analyze": lambda: _analyze(cfg),

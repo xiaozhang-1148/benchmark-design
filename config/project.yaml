@@ -1,5 +1,5 @@
-input_root: /mnt/nvme_user/baoquan/Label_Data/images_folder
-output_root: /mnt/nvme_user/baoquan/Label_Data/benchmark-export
+input_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/ALL-data/bench_dataset
+output_root: /mnt/nvme_user/baoquan_datasets/EDA-Data-Folder/processed_2/bench-export
 workers: 128
 pipelines:
   hmer:
@@ -14,6 +14,3 @@ pipelines:
     config: config/line_analysis.yaml
   page_level_hmer:
     skip_figures: false
-  page_level_latex_split:
-    enabled: true
-    config: config/page_level_latex_split.yaml

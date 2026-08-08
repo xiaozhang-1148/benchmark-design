@@ -1,4 +1,4 @@
-"""Unified HMER + page-level + line-level + split project export."""
+"""Unified HMER + page-level + line-level project export."""
 
 from __future__ import annotations
 
@@ -7,15 +7,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
-from benchmark_design.config.page_level_latex_split import DEFAULT_PAGE_LEVEL_LATEX_SPLIT_CONFIG
 from benchmark_design.ocr.processing import ProcessingOptions, build_enriched_corpus_cached
 from benchmark_design.page_level_latex.pipeline import run_page_level_latex_export
 from benchmark_design.foreground.analysis import export_foreground_analysis
 from benchmark_design.foreground.calibration import calibration_to_threshold_config
-from benchmark_design.page_level_latex.split_inputs import prepare_split_inputs
-from benchmark_design.page_level_latex_split.audit import SplitAcceptanceError
-from benchmark_design.page_level_latex_split.config import load_split_config
-from benchmark_design.page_level_latex_split.pipeline import run_page_level_latex_split
 from benchmark_design.progress import default_worker_count, partition_workers, run_parallel_tasks
 from benchmark_design.export_layout import (
     BenchmarkExportLayout,
@@ -50,7 +45,6 @@ def run_project_export(
     page_level_output: Path | None = None,
     line_level_output: Path | None = None,
     page_level_hmer_output: Path | None = None,
-    page_level_latex_split_output: Path | None = None,
     processing: ProcessingOptions | None = None,
     block_level_processing: BlockLevelProcessingOptions | None = None,
     skip_hmer_figures: bool = False,
@@ -65,10 +59,6 @@ def run_project_export(
     line_level_config: Path | None = None,
     skip_page_level_hmer: bool = False,
     skip_page_level_hmer_figures: bool = False,
-    skip_page_level_latex_split: bool = True,
-    page_level_latex_split_config: Path | None = None,
-    skip_page_level_latex_split_figures: bool = False,
-    allow_split_acceptance_failure: bool = False,
     # Backward-compatible aliases (deprecated).
     vision_output: Path | None = None,
     vision_processing: BlockLevelProcessingOptions | None = None,
@@ -93,8 +83,6 @@ def run_project_export(
     page_level_dir = page_level_output or layout.page_level
     line_level_dir = line_level_output or layout.line_level
     page_level_hmer_dir = page_level_hmer_output or layout.page_level_hmer
-    split_dir = page_level_latex_split_output or layout.page_level_latex_split
-    split_config_path = page_level_latex_split_config or DEFAULT_PAGE_LEVEL_LATEX_SPLIT_CONFIG
 
     load_workers = min(2, default_worker_count())
     with ThreadPoolExecutor(max_workers=load_workers) as load_pool:
@@ -287,38 +275,6 @@ def run_project_export(
         else None
     )
 
-    split_manifest: dict[str, str] | None = None
-    split_selected_seed: int | None = None
-    if not skip_page_level_latex_split:
-        split_config = load_split_config(split_config_path)
-        split_inputs_dir = layout.split_inputs
-        prepare_split_inputs(
-            input_dir,
-            split_inputs_dir,
-            dataset_version=split_config.dataset_version,
-            workers=phase2_workers,
-            show_progress=processing.show_progress or block_level_processing.show_progress,
-            page_level_latex_output=None if skip_page_level_hmer else page_level_hmer_dir,
-        )
-        try:
-            split_result = run_page_level_latex_split(
-                split_inputs_dir,
-                split_dir,
-                config_path=split_config_path,
-                config=split_config,
-                skip_figures=skip_page_level_latex_split_figures,
-                show_progress=processing.show_progress or block_level_processing.show_progress,
-                workers=phase2_workers,
-                allow_failed_acceptance=allow_split_acceptance_failure,
-            )
-        except SplitAcceptanceError:
-            if not allow_split_acceptance_failure:
-                raise
-            split_manifest = None
-        else:
-            split_manifest = split_result.artifact_manifest
-            split_selected_seed = split_result.selected_seed
-
     overview_metrics = compute_dataset_overview(
         input_dir,
         processing=processing,
@@ -336,9 +292,7 @@ def run_project_export(
         page_level_output=None if skip_page_level else page_level_dir,
         line_level_output=None if skip_line_level else line_level_dir,
         page_level_hmer_output=None if skip_page_level_hmer else page_level_hmer_dir,
-        page_level_latex_split_output=None if skip_page_level_latex_split else split_dir,
         overview_metrics=overview_metrics,
-        split_selected_seed=split_selected_seed,
     )
     summary_json = write_project_summary(summary, output_root)
     pipeline_doc = write_export_pipeline_doc(output_root)
@@ -351,7 +305,6 @@ def run_project_export(
             page_level_output=None if skip_page_level else page_level_dir,
             line_level_output=None if skip_line_level else line_level_dir,
             page_level_hmer_output=None if skip_page_level_hmer else page_level_hmer_dir,
-            page_level_latex_split_output=None if skip_page_level_latex_split else split_dir,
         ),
         output_root,
     )
@@ -382,7 +335,6 @@ def run_project_export(
         page_level_output=None if skip_page_level else page_level_dir,
         line_level_output=None if skip_line_level else line_level_dir,
         page_level_hmer_output=None if skip_page_level_hmer else page_level_hmer_dir,
-        page_level_latex_split_output=None if skip_page_level_latex_split else split_dir,
         hmer_manifest=hmer_manifest,
         structure_layout_manifest=structure_layout_manifest,
         hybrid_layout_manifest=hybrid_layout_manifest,
@@ -390,7 +342,6 @@ def run_project_export(
         block_density_manifest=block_density_manifest,
         line_level_manifest=line_level_manifest,
         page_level_hmer_manifest=page_level_hmer_manifest,
-        page_level_latex_split_manifest=split_manifest,
         dataset_overview=overview_path,
         summary_json=summary_json,
         pipeline_doc=pipeline_doc,

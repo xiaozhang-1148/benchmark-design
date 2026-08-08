@@ -12,8 +12,6 @@ from benchmark_design.export_layout import (
     BLOCK_LEVEL_STRUCTURE_LAYOUT_DIR,
     PAGE_LEVEL_DIR,
     PAGE_LEVEL_HMER_DIR,
-    PAGE_LEVEL_LATEX_SPLIT_DIR,
-    SPLIT_INPUTS_DIR,
 )
 
 
@@ -26,7 +24,6 @@ def build_pipeline_manifest(
     page_level_output: Path | None,
     line_level_output: Path | None,
     page_level_hmer_output: Path | None,
-    page_level_latex_split_output: Path | None,
     # Backward-compatible aliases (deprecated).
     block_level_output: Path | None = None,
     density_output: Path | None = None,
@@ -40,20 +37,20 @@ def build_pipeline_manifest(
             "id": "HMER",
             "role": "deliverable",
             "path": _rel(output_root, hmer_output),
-            "feeds": [PAGE_LEVEL_HMER_DIR, PAGE_LEVEL_LATEX_SPLIT_DIR],
+            "feeds": [PAGE_LEVEL_HMER_DIR],
         },
         {
             "id": f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_STRUCTURE_LAYOUT_DIR}",
             "role": "supporting",
             "path": _rel(output_root, structure_layout_output),
-            "feeds": [PAGE_LEVEL_LATEX_SPLIT_DIR],
+            "feeds": [],
             "note": "Single-flow and columnar-flow layout metrics.",
         },
         {
             "id": f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_HYBRID_LAYOUT_DIR}",
             "role": "supporting",
             "path": _rel(output_root, hybrid_layout_output),
-            "feeds": [PAGE_LEVEL_LATEX_SPLIT_DIR],
+            "feeds": [],
             "note": "Hybrid-layout page metrics.",
         },
     ]
@@ -63,7 +60,7 @@ def build_pipeline_manifest(
                 "id": PAGE_LEVEL_DIR,
                 "role": "supporting",
                 "path": _rel(output_root, page_level_output),
-                "feeds": [PAGE_LEVEL_LATEX_SPLIT_DIR, "line_level"],
+                "feeds": ["line_level"],
                 "note": "Full-page foreground density and calibration.",
             }
         )
@@ -73,7 +70,7 @@ def build_pipeline_manifest(
                 "id": "line_level",
                 "role": "deliverable",
                 "path": _rel(output_root, line_level_output),
-                "feeds": [PAGE_LEVEL_LATEX_SPLIT_DIR],
+                "feeds": [],
             }
         )
     if page_level_hmer_output is not None:
@@ -83,29 +80,7 @@ def build_pipeline_manifest(
                 "role": "deliverable",
                 "path": _rel(output_root, page_level_hmer_output),
                 "depends_on": ["HMER"],
-                "feeds": [PAGE_LEVEL_LATEX_SPLIT_DIR],
-            }
-        )
-    if page_level_latex_split_output is not None:
-        split_inputs = page_level_latex_split_output / SPLIT_INPUTS_DIR
-        depends_on = [PAGE_LEVEL_HMER_DIR, "HMER", "line_level"]
-        if page_level_output is not None:
-            depends_on.append(PAGE_LEVEL_DIR)
-        depends_on.extend(
-            [
-                f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_STRUCTURE_LAYOUT_DIR}",
-                f"{BLOCK_LEVEL_DIR}/{BLOCK_LEVEL_HYBRID_LAYOUT_DIR}",
-            ]
-        )
-        stages.append(
-            {
-                "id": PAGE_LEVEL_LATEX_SPLIT_DIR,
-                "role": "deliverable",
-                "path": _rel(output_root, page_level_latex_split_output),
-                "depends_on": depends_on,
-                "inputs": {
-                    "split_inputs_dir": _rel(output_root, split_inputs),
-                },
+                "feeds": [],
             }
         )
 
@@ -119,7 +94,6 @@ def build_pipeline_manifest(
             "line_level",
             "HMER",
             PAGE_LEVEL_HMER_DIR,
-            PAGE_LEVEL_LATEX_SPLIT_DIR,
         ],
         "deliverables": deliverables,
         "stages": stages,

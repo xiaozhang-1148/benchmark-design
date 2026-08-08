@@ -178,6 +178,33 @@ def annotate_bars_dual(
         ax.set_ylim(0, ymax * 1.22 if ymax > 0 else 1.0)
 
 
+def annotate_points_dual(
+    ax,
+    xs: list[float] | np.ndarray,
+    ys: list[float] | np.ndarray,
+    counts: list[int] | np.ndarray,
+    ratios: list[float] | np.ndarray,
+    *,
+    fontsize: int = FONT_ANNOT,
+) -> None:
+    """Annotate line/scatter points with page_count and page_ratio (two lines)."""
+    for x, y, count, ratio in zip(xs, ys, counts, ratios, strict=True):
+        if int(count) <= 0 and float(ratio) <= 0:
+            continue
+        ax.annotate(
+            dual_label(int(count), float(ratio)),
+            xy=(float(x), float(y)),
+            xytext=(0, 6),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=fontsize,
+            clip_on=False,
+        )
+    ymax = ax.get_ylim()[1]
+    ax.set_ylim(0, ymax * 1.22 if ymax > 0 else 1.0)
+
+
 def annotate_hist_from_frame(ax, patches, frame: pd.DataFrame, *, fontsize: int = FONT_ANNOT) -> None:
     counts = frame["page_count"].tolist()
     ratios = frame["page_ratio"].tolist()
@@ -210,6 +237,7 @@ def stats_box_text(*, vmin: float, vmean: float, vmax: float) -> str:
 
 
 def add_stats_box(ax, *, vmin: float, vmean: float, vmax: float) -> None:
+    """Place min/mean/max in the upper-right corner (never mixed into the legend)."""
     ax.text(
         0.98,
         0.98,
@@ -218,7 +246,16 @@ def add_stats_box(ax, *, vmin: float, vmean: float, vmax: float) -> None:
         ha="right",
         va="top",
         fontsize=FONT_BOX,
-        bbox={"facecolor": "white", "alpha": 0.9, "edgecolor": "#B0B0B0", "boxstyle": "round,pad=0.3"},
+        linespacing=1.25,
+        zorder=10,
+        clip_on=False,
+        bbox={
+            "facecolor": "white",
+            "alpha": 0.95,
+            "edgecolor": "#B0B0B0",
+            "boxstyle": "round,pad=0.35",
+            "linewidth": 0.8,
+        },
     )
 
 

@@ -18,7 +18,14 @@ from benchmark_design.ocr.structure_distribution import STRUCTURE_TYPES
 from benchmark_design.ocr.token_longtail import DEFAULT_TOP_K, top_k_coverage
 from benchmark_design.ocr.token_taxonomy import TOKEN_CATEGORY_ORDER, TokenCategory, classify_token
 
-CJK_FONT_CANDIDATES: tuple[str, ...] = ("SimSun", "WenQuanYi Micro Hei")
+CJK_FONT_CANDIDATES: tuple[str, ...] = (
+    "Noto Sans CJK SC",
+    "Source Han Sans SC",
+    "WenQuanYi Micro Hei",
+    "Droid Sans Fallback",
+    "SimHei",
+    "SimSun",
+)
 _MATPLOTLIB_CONFIGURED = False
 
 BIN_DISPLAY_LABELS: tuple[str, ...] = ("1-10", "11-20", "21-40", "41-80", ">80")
@@ -472,8 +479,7 @@ def write_ast_depth_histogram(features: list[ExpressionFeatures], output_path: P
 DIFFICULTY_REGION_COLORS: dict[str, str] = {
     "L1": "#70AD47",
     "L2": "#4472C4",
-    "L3": "#FFC000",
-    "L4": "#C00000",
+    "L3": "#C00000",
 }
 
 

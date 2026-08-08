@@ -213,14 +213,13 @@ def build_cross_benchmark_comparison_markdown(profiles: list[CrossBenchmarkProfi
     lines.extend(
         [
             "",
-            "## 7. Expression-level Structural Difficulty (L1–L4)",
+            "## 7. Expression-level Structural Difficulty (L1–L3)",
             "",
             "Expression counts and shares by **Expression-level Structural Difficulty** tier, derived from "
             "L/B/D coordinates: **L** token length (L0 ≤ 20, L1 21–40, L2 > 40), **B** structure breadth "
             "(B0 0–1 types, B1 2 types, B2 ≥ 3 types), **D** structure-forest AST depth (D0 0–1, D1 2, D2 ≥ 3). "
-            "Classification: **L1** (L0B0D0); **L4** (≥ 2 of L2/B2/D2 with L ≠ L0 and D ≠ D0); "
-            "**L2** (score = 1, or score = 2 with L ≠ L2 and D ≠ D2); **L3** (all remaining). "
-            "Each cell shows `count (share%)`.",
+            "Three tiers: **L1** (L0B0D0); **L2** (former L2 ∪ L3 under the legacy four-tier L/B/D rules); "
+            "**L3** (former L4). Each cell shows `count (share%)`.",
             "",
             f"| Dataset | {tier_headers} |",
             "| --- | " + " | ".join("---:" for _ in STRUCTURAL_DIFFICULTY_TIERS) + " |",

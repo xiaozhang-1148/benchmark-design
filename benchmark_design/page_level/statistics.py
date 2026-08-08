@@ -13,7 +13,6 @@ from benchmark_design.page_level.models import ImageFeatureRow, ImageInventoryRo
 CONTINUOUS_METRICS: tuple[str, ...] = (
     "width",
     "height",
-    "aspect_ratio",
     "foreground_density",
 )
 
@@ -76,7 +75,6 @@ def compute_categorical_statistics(
     _append_counts("file_format", [row.file_format for row in inventory])
     _append_counts("stored_color_mode", [row.stored_color_mode for row in inventory])
     _append_counts("effective_color_type", [row.effective_color_type for row in features])
-    _append_counts("aspect_ratio_group", [row.aspect_ratio_group for row in features])
     _append_counts("bits_per_channel", [str(row.bits_per_channel) for row in features])
     _append_counts(
         "alpha_used",
@@ -85,26 +83,11 @@ def compute_categorical_statistics(
     return pd.DataFrame(rows)
 
 
-def compute_aspect_group_summary(features: list[ImageFeatureRow]) -> dict[str, dict[str, float | int]]:
-    total = len(features)
-    grouped: dict[str, int] = {}
-    for row in features:
-        grouped[row.aspect_ratio_group] = grouped.get(row.aspect_ratio_group, 0) + 1
-    return {
-        name: {
-            "count": count,
-            "ratio": count / total if total else 0.0,
-        }
-        for name, count in sorted(grouped.items())
-    }
-
-
 def compute_dataset_highlights(features: list[ImageFeatureRow]) -> dict[str, object]:
     densities = np.array([row.foreground_density for row in features], dtype=np.float64)
     return {
         "density_below_0_03_ratio": float(np.mean(densities < 0.03)) if densities.size else 0.0,
         "density_above_0_08_ratio": float(np.mean(densities > 0.08)) if densities.size else 0.0,
-        "aspect_groups": compute_aspect_group_summary(features),
     }
 
 

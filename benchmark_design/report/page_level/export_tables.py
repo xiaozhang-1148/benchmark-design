@@ -94,12 +94,3 @@ def write_statistics_tables(
         encoding="utf-8",
     )
     return summary
-
-
-def write_aspect_ratio_groups(features: list[ImageFeatureRow], tables_dir: Path) -> None:
-    frame = (
-        pd.DataFrame([asdict(row) for row in features])
-        .groupby("aspect_ratio_group", as_index=False)
-        .agg(image_count=("image_id", "count"), aspect_ratio_median=("aspect_ratio", "median"))
-    )
-    _write_frame(frame, tables_dir / "aspect_ratio_groups")

@@ -75,39 +75,6 @@ def write_ast_page_summary(page_rows: Sequence[PageLatexMetricsRow], output_path
     return output_path
 
 
-def write_ast_depth_coverage(
-    expression_rows: Sequence[ExpressionLatexMetricsRow],
-    page_rows: Sequence[PageLatexMetricsRow],
-    output_path: Path,
-) -> Path:
-    valid = [row for row in expression_rows if row.valid_for_latex]
-    total_expr = len(valid)
-    total_pages = len(page_rows)
-    expr_counts = Counter(row.ast_depth for row in valid if row.ast_depth <= 5)
-    max_depth_page_counts = Counter(page.max_ast_depth for page in page_rows)
-    depths_by_page: dict[str, set[int]] = defaultdict(set)
-    for row in valid:
-        depths_by_page[row.image_id].add(row.ast_depth)
-    records = []
-    for depth in range(0, 6):
-        expr_count = expr_counts.get(depth, 0)
-        page_cover = sum(1 for page in page_rows if depth in depths_by_page.get(page.image_id, set()))
-        records.append(
-            {
-                "ast_depth": depth,
-                "expression_count": expr_count,
-                "expression_ratio": expr_count / total_expr if total_expr else 0.0,
-                "page_count": page_cover,
-                "page_ratio": page_cover / total_pages if total_pages else 0.0,
-                "pages_with_max_depth": max_depth_page_counts.get(depth, 0),
-            }
-        )
-    frame = pd.DataFrame(records)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_csv(output_path, index=False)
-    return output_path
-
-
 def write_structure_coverage(
     expression_rows: Sequence[ExpressionLatexMetricsRow],
     page_rows: Sequence[PageLatexMetricsRow],

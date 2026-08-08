@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from ..utils import atomic_write_json, ensure_dir, load_image_rgb
 from .config import dump_frozen_run_config
-from .extractor import ProjectedTokenExtractor
+from .ablation_extractor import make_extractor
 from .io_util import (
     assert_same_id_set,
     assert_same_n,
@@ -45,7 +45,7 @@ def _extract_shard(
     worker_tag: str = "",
 ) -> dict[str, Any]:
     ensure_dir(shard_dir)
-    extractor = ProjectedTokenExtractor(cfg)
+    extractor = make_extractor(cfg)
     dim = None
     vecs: list[np.ndarray] = []
     meta_rows: list[dict[str, Any]] = []

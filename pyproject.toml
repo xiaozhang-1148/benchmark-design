@@ -40,6 +40,8 @@ analysis = [
     "numba>=0.60.0",
     "llvmlite>=0.43.0",
     "hdbscan>=0.8.38",
+    "leidenalg>=0.10.0",
+    "igraph>=0.11.0",
 ]
 
 # DeepSeek-OCR-2 (https://github.com/deepseek-ai/DeepSeek-OCR-2)
@@ -82,9 +84,13 @@ torchvision = { index = "pytorch-cu124" }
 torchaudio = { index = "pytorch-cu124" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["benchmark_design", "heatmap_analysis", "src"]
+packages = ["benchmark_design", "src"]
 
 [tool.pytest.ini_options]
 markers = [
     "integration: full-dataset integration tests",
+]
+addopts = [
+    "-m",
+    "not integration",
 ]

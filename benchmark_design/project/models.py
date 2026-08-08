@@ -27,7 +27,6 @@ class ProjectExportResult:
     page_level_output: Path | None
     line_level_output: Path | None
     page_level_hmer_output: Path | None
-    page_level_latex_split_output: Path | None
     hmer_manifest: dict[str, Path]
     structure_layout_manifest: dict[str, str]
     hybrid_layout_manifest: dict[str, str]
@@ -35,7 +34,6 @@ class ProjectExportResult:
     block_density_manifest: dict[str, str] | None
     line_level_manifest: dict[str, str] | None
     page_level_hmer_manifest: dict[str, str] | None
-    page_level_latex_split_manifest: dict[str, str] | None
     dataset_overview: Path
     summary_json: Path
     pipeline_doc: Path

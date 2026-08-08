@@ -41,7 +41,6 @@ def test_run_project_export_root_artifacts(tmp_path: Path) -> None:
         skip_page_level_figures=True,
         skip_line_level_figures=True,
         skip_page_level_hmer_figures=True,
-        skip_page_level_latex_split=True,
     )
 
     layout = BenchmarkExportLayout(output_root)

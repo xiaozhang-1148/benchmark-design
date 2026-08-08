@@ -16,7 +16,6 @@ class ProjectPipelineConfig:
     page_level: dict[str, Any] = field(default_factory=dict)
     line_level: dict[str, Any] = field(default_factory=dict)
     page_level_hmer: dict[str, Any] = field(default_factory=dict)
-    page_level_latex_split: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +39,5 @@ def load_project_config(path: Path) -> ProjectConfig:
             page_level=dict(pipelines_payload.get("page_level", {}) or {}),
             line_level=dict(pipelines_payload.get("line_level", {}) or {}),
             page_level_hmer=dict(pipelines_payload.get("page_level_hmer", {}) or {}),
-            page_level_latex_split=dict(pipelines_payload.get("page_level_latex_split", {}) or {}),
         ),
     )

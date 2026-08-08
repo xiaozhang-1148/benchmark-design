@@ -53,9 +53,7 @@ def build_project_summary(
     page_level_output: Path | None,
     line_level_output: Path | None,
     page_level_hmer_output: Path | None = None,
-    page_level_latex_split_output: Path | None = None,
     overview_metrics: DatasetOverviewMetrics | None = None,
-    split_selected_seed: int | None = None,
     # Backward-compatible aliases (deprecated).
     block_level_output: Path | None = None,
     density_output: Path | None = None,
@@ -79,11 +77,6 @@ def build_project_summary(
     )
     line_dataset_summary_path = (
         line_level_output / "dataset_summary.json" if line_level_output is not None else None
-    )
-    split_manifest_path = (
-        page_level_latex_split_output / "split_manifest.csv"
-        if page_level_latex_split_output is not None
-        else None
     )
 
     hmer_metadata = _read_json(hmer_metadata_path)
@@ -209,22 +202,6 @@ def build_project_summary(
             key_metrics={
                 "output_root": str(page_level_hmer_output.resolve()),
             },
-        )
-
-    if page_level_latex_split_output is not None:
-        split_metrics: dict[str, Any] = {}
-        if split_selected_seed is not None:
-            split_metrics["selected_seed"] = split_selected_seed
-        if split_manifest_path is not None and split_manifest_path.is_file():
-            split_metrics["split_manifest"] = split_manifest_path.relative_to(output_root).as_posix()
-        pipelines["page_level_latex_split"] = _pipeline_entry(
-            manifest_rel=(
-                split_metrics.get("split_manifest")
-                if split_manifest_path is not None and split_manifest_path.is_file()
-                else None
-            ),
-            payload=None,
-            key_metrics=split_metrics,
         )
 
     return ProjectSummary(

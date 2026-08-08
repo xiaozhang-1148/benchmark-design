@@ -17,7 +17,6 @@ from benchmark_design.page_level_latex.page_latex_metrics import (
     aggregate_page_latex_metrics,
     page_metrics_to_frame,
 )
-from benchmark_design.page_level_latex.plot_data import build_fig6_5_joint_grouped
 from benchmark_design.page_level_latex.plotting import export_page_latex_figures
 from benchmark_design.page_level_latex.similar_tokens import (
     compute_similar_token_stats,
@@ -25,7 +24,6 @@ from benchmark_design.page_level_latex.similar_tokens import (
     write_similar_token_samples_stub,
 )
 from benchmark_design.page_level_latex.tables import (
-    write_ast_depth_coverage,
     write_ast_page_summary,
     write_distinct_token_distribution,
     write_distinct_token_summary,
@@ -97,21 +95,12 @@ def run_page_level_latex_export(
     )
 
     write_ast_page_summary(page_rows, summary_dir / "page_latex_ast_page_summary.csv")
-    write_ast_depth_coverage(expression_rows, page_rows, summary_dir / "page_latex_ast_depth_coverage.csv")
     write_structure_coverage(expression_rows, page_rows, summary_dir / "page_latex_structure_coverage.csv")
     write_structure_type_count(page_rows, summary_dir / "page_latex_structure_type_count.csv")
     write_structure_combinations(page_rows, summary_dir / "page_latex_structure_combinations.csv")
     write_structure_depth_joint_distribution(
         page_rows,
         summary_dir / "page_latex_structure_depth_joint_distribution.csv",
-    )
-    build_fig6_5_joint_grouped(page_rows).to_csv(
-        plot_data_dir / "fig6_5_structure_depth_joint_distribution.csv",
-        index=False,
-    )
-    write_structure_depth_joint_distribution(
-        page_rows,
-        plot_data_dir / "page_structure_depth_joint_distribution_exact.csv",
     )
     write_token_category_coverage(
         expression_rows,
@@ -183,8 +172,6 @@ def run_page_level_latex_export(
             expression_rows,
             page_rows,
             figures_dir,
-            rare_tokens=rare8_tokens,
-            similar_group_summary=similar["group_summary"],
         )
         figure_manifest = {
             key: path.relative_to(output_root).as_posix() for key, path in figure_paths.items()

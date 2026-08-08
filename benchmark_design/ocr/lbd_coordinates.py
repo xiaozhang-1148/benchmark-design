@@ -14,7 +14,15 @@ L_BINS: tuple[str, ...] = ("L0", "L1", "L2")
 B_BINS: tuple[str, ...] = ("B0", "B1", "B2")
 D_BINS: tuple[str, ...] = ("D0", "D1", "D2")
 
-STRUCTURAL_DIFFICULTY_TIERS: tuple[str, ...] = ("L1", "L2", "L3", "L4")
+STRUCTURAL_DIFFICULTY_TIERS: tuple[str, ...] = ("L1", "L2", "L3")
+
+# Collapse legacy four-tier labels: L2' = L2 ∪ L3, L3' = L4.
+_LEGACY_FOUR_TIER_TO_THREE: dict[str, str] = {
+    "L1": "L1",
+    "L2": "L2",
+    "L3": "L2",
+    "L4": "L3",
+}
 
 L_RANGES: dict[str, str] = {
     "L0": "<=20",
@@ -117,8 +125,8 @@ def lbd_bin_index(bin_label: str) -> int:
     return D_BINS.index(bin_label)
 
 
-def classify_lbd(l_bin: str, b_bin: str, d_bin: str) -> str:
-    """Classify expression-level structural difficulty from L/B/D bins."""
+def _classify_lbd_four_tier(l_bin: str, b_bin: str, d_bin: str) -> str:
+    """Legacy four-tier L/B/D classification (internal)."""
     l_idx = int(l_bin[1])
     b_idx = int(b_bin[1])
     d_idx = int(d_bin[1])
@@ -134,6 +142,12 @@ def classify_lbd(l_bin: str, b_bin: str, d_bin: str) -> str:
     if score == 2 and l_idx != 2 and d_idx != 2:
         return "L2"
     return "L3"
+
+
+def classify_lbd(l_bin: str, b_bin: str, d_bin: str) -> str:
+    """Classify expression-level structural difficulty from L/B/D bins (three tiers)."""
+    legacy = _classify_lbd_four_tier(l_bin, b_bin, d_bin)
+    return _LEGACY_FOUR_TIER_TO_THREE[legacy]
 
 
 def difficulty_region(*, l_bin: str, b_bin: str, d_bin: str) -> str:
